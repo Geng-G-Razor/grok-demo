@@ -1,5 +1,6 @@
 :root {
   color-scheme: dark;
+  --app-height: 100vh;
   --bg: #0a1017;
   --panel: rgba(16, 22, 32, 0.96);
   --panel-2: rgba(13, 18, 27, 0.98);
@@ -18,11 +19,13 @@
 
 html,
 body {
+  height: 100%;
   min-height: 100%;
 }
 
 body {
   margin: 0;
+  overflow: hidden;
   font-family:
     "SF Pro Display",
     "PingFang SC",
@@ -37,6 +40,7 @@ body {
 
 .page {
   width: min(1440px, calc(100% - 12px));
+  height: var(--app-height);
   margin: 6px auto;
 }
 
@@ -47,7 +51,8 @@ body {
 }
 
 .chat-shell {
-  min-height: calc(100vh - 16px);
+  height: calc(var(--app-height) - 16px);
+  min-height: 0;
   padding: 10px;
   position: relative;
   display: grid;
@@ -206,6 +211,8 @@ button {
 .chat-feed {
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 8px;
   border-radius: 16px;
   background: rgba(5, 8, 13, 0.9);
@@ -526,11 +533,13 @@ button:disabled {
 
   .page {
     width: min(100% - 6px, 1440px);
+    height: var(--app-height);
     margin: 3px auto;
   }
 
   .chat-shell {
-    min-height: calc(100vh - 8px);
+    height: calc(var(--app-height) - 8px);
+    min-height: 0;
     padding: 6px 2px;
   }
 
@@ -667,7 +676,7 @@ button:disabled {
     right: auto;
     transform: translateX(-50%);
     width: min(560px, calc(100vw - 12px));
-    max-height: min(72vh, calc(100vh - 92px));
+    max-height: min(72vh, calc(var(--app-height) - 92px));
     border-radius: 16px;
   }
 

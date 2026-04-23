@@ -46,12 +46,29 @@ let activeCharacterId = '';
 let conversations = [];
 let currentConversationId = '';
 let isRequestInFlight = false;
+let viewportSyncFrame = 0;
 
 function syncPanelToggleButton(button, panel, label) {
   const isOpen = !panel.hidden;
   button.setAttribute('aria-pressed', String(isOpen));
   button.title = isOpen ? `收起${label}` : label;
   button.setAttribute('aria-label', isOpen ? `收起${label}面板` : `切换${label}面板`);
+}
+
+function syncViewportHeight() {
+  const nextHeight = window.visualViewport?.height || window.innerHeight;
+  document.documentElement.style.setProperty('--app-height', `${Math.round(nextHeight)}px`);
+}
+
+function scheduleViewportHeightSync() {
+  if (viewportSyncFrame) {
+    cancelAnimationFrame(viewportSyncFrame);
+  }
+
+  viewportSyncFrame = requestAnimationFrame(() => {
+    viewportSyncFrame = 0;
+    syncViewportHeight();
+  });
 }
 
 function syncAllPanelToggleButtons() {
@@ -292,6 +309,10 @@ function cloneMessages(messages) {
   }));
 }
 
+function hasMeaningfulConversationMessages(messages) {
+  return messages.some((message) => String(message?.content || '').trim());
+}
+
 function createConversationRecord(seed = {}) {
   const now = new Date().toISOString();
 
@@ -312,7 +333,20 @@ function getCurrentConversationRecord() {
 }
 
 function persistConversations() {
-  localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversations));
+  const persistedConversations = conversations.filter((record) =>
+    hasMeaningfulConversationMessages(record.messages || []),
+  );
+  localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(persistedConversations));
+}
+
+function pruneEmptyConversations({ keepCurrent = true } = {}) {
+  conversations = conversations.filter((record) => {
+    if (keepCurrent && record.id === currentConversationId) {
+      return true;
+    }
+
+    return hasMeaningfulConversationMessages(record.messages || []);
+  });
 }
 
 function saveCurrentConversationState() {
@@ -326,6 +360,7 @@ function saveCurrentConversationState() {
   record.messages = messages;
   record.updatedAt = new Date().toISOString();
   record.title = createConversationTitle(messages);
+  pruneEmptyConversations();
   persistConversations();
   renderConversationList();
 }
@@ -402,12 +437,16 @@ function formatConversationTime(value) {
 function renderConversationList() {
   conversationList.innerHTML = '';
 
-  if (!conversations.length) {
+  const visibleConversations = conversations.filter((record) =>
+    hasMeaningfulConversationMessages(record.messages || []),
+  );
+
+  if (!visibleConversations.length) {
     conversationList.innerHTML = '<p class="history-empty">暂无对话记录</p>';
     return;
   }
 
-  const sorted = [...conversations].sort(
+  const sorted = [...visibleConversations].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
 
@@ -503,7 +542,9 @@ function loadConversations() {
     const stored = JSON.parse(localStorage.getItem(CONVERSATIONS_KEY) || 'null');
 
     if (Array.isArray(stored) && stored.length) {
-      conversations = stored.map((item) => createConversationRecord(item));
+      conversations = stored
+        .map((item) => createConversationRecord(item))
+        .filter((record) => hasMeaningfulConversationMessages(record.messages || []));
       return;
     }
   } catch {
@@ -653,6 +694,7 @@ function clearConversation() {
 
 function startNewConversation() {
   saveCurrentConversationState();
+  pruneEmptyConversations({ keepCurrent: false });
 
   const record = createConversationRecord();
   conversations.push(record);
@@ -918,6 +960,10 @@ document.addEventListener('keydown', (event) => {
   closeAllPanels();
 });
 
+window.addEventListener('resize', scheduleViewportHeightSync);
+window.visualViewport?.addEventListener('resize', scheduleViewportHeightSync);
+window.visualViewport?.addEventListener('scroll', scheduleViewportHeightSync);
+
 characterSelect.addEventListener('change', () => {
   activeCharacterId = characterSelect.value;
   syncCharacterEditor();
@@ -950,4 +996,5 @@ renderConversation();
 setStatus(conversation.length ? '已恢复' : '未发送', conversation.length ? 'success' : 'idle');
 syncAllPanelToggleButtons();
 syncPanelOverlay();
+syncViewportHeight();
 saveSettings();
