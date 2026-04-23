@@ -53,12 +53,12 @@ function syncPanelToggleButton(button, panel, label) {
 
 function getDefaultCharacters() {
   return [
-    {
+    createCharacterRecord({
       id: 'sample-gentle-companion',
       name: '温柔陪聊',
       prompt:
         '你是一个自然、温柔、耐心的中文角色，擅长陪伴式对话。请保持口吻稳定、表达细腻，不要跳出角色，不要突然变成机械客服语气。',
-    },
+    }),
   ];
 }
 
@@ -84,18 +84,29 @@ function getActiveCharacter() {
   return characters.find((character) => character.id === activeCharacterId) || null;
 }
 
+function createCharacterRecord(seed = {}) {
+  const name = String(seed.name || '').trim();
+  const prompt = String(seed.prompt || '').trim();
+
+  return {
+    ...seed,
+    name,
+    prompt,
+  };
+}
+
 function updateActiveCharacterChip() {
   const activeCharacter = getActiveCharacter();
   activeCharacterChip.textContent = activeCharacter ? activeCharacter.name : '无角色';
   activeCharacterChip.classList.toggle('has-character', Boolean(activeCharacter));
 }
 
-function buildEffectiveSystemPrompt() {
+function buildEffectiveSystemPrompt({ includeCharacter = true } = {}) {
   const manualPrompt = String(form.elements.systemPrompt.value || '').trim();
   const activeCharacter = getActiveCharacter();
   const parts = [];
 
-  if (activeCharacter?.prompt) {
+  if (includeCharacter && activeCharacter?.prompt) {
     parts.push(
       [
         '请始终稳定扮演以下角色，不要跳出设定。',
@@ -198,6 +209,9 @@ function createConversationRecord(seed = {}) {
     id: seed.id || createId('conversation'),
     title: seed.title || '新对话',
     messages: cloneMessages(seed.messages || []),
+    injectedCharacterSignatures: Array.isArray(seed.injectedCharacterSignatures)
+      ? [...new Set(seed.injectedCharacterSignatures.filter(Boolean))]
+      : [],
     createdAt: seed.createdAt || now,
     updatedAt: seed.updatedAt || now,
   };
@@ -224,6 +238,56 @@ function saveCurrentConversationState() {
   record.title = createConversationTitle(messages);
   persistConversations();
   renderConversationList();
+}
+
+function getActiveCharacterSignature() {
+  const activeCharacter = getActiveCharacter();
+
+  if (!activeCharacter?.id || !activeCharacter.prompt) {
+    return '';
+  }
+
+  return JSON.stringify({
+    id: activeCharacter.id,
+    name: activeCharacter.name,
+    prompt: activeCharacter.prompt,
+  });
+}
+
+function shouldInjectCharacterForCurrentConversation() {
+  const record = getCurrentConversationRecord();
+  const signature = getActiveCharacterSignature();
+
+  if (!record || !signature) {
+    return false;
+  }
+
+  return !record.injectedCharacterSignatures.includes(signature);
+}
+
+function markActiveCharacterInjectedForCurrentConversation() {
+  const record = getCurrentConversationRecord();
+  const signature = getActiveCharacterSignature();
+
+  if (!record || !signature) {
+    return;
+  }
+
+  if (!record.injectedCharacterSignatures.includes(signature)) {
+    record.injectedCharacterSignatures.push(signature);
+    persistConversations();
+  }
+}
+
+function resetCurrentConversationCharacterInjection() {
+  const record = getCurrentConversationRecord();
+
+  if (!record) {
+    return;
+  }
+
+  record.injectedCharacterSignatures = [];
+  persistConversations();
 }
 
 function loadConversationIntoView(record) {
@@ -332,7 +396,8 @@ function loadCharacters() {
     const stored = JSON.parse(localStorage.getItem(CHARACTERS_KEY) || 'null');
 
     if (Array.isArray(stored) && stored.length) {
-      characters = stored;
+      characters = stored.map((character) => createCharacterRecord(character));
+      localStorage.setItem(CHARACTERS_KEY, JSON.stringify(characters));
       return;
     }
   } catch {
@@ -435,7 +500,17 @@ function buildRequestMessages() {
     }));
 }
 
-function updateDebug(data, response) {
+function getCharacterPromptStats(includeCharacterInRequest) {
+  const activeCharacter = getActiveCharacter();
+
+  if (!activeCharacter) {
+    return '无角色';
+  }
+
+  return `${includeCharacterInRequest ? '本轮发送' : '本轮未发送'} · ${activeCharacter.prompt.length} 字`;
+}
+
+function updateDebug(data, response, requestMeta = {}) {
   setBlock(
     metaEl,
     [
@@ -444,6 +519,7 @@ function updateDebug(data, response) {
       `Endpoint: ${data.endpoint ?? '-'}`,
       `Success: ${String(data.ok ?? response.ok)}`,
       `Character: ${getActiveCharacter()?.name || '无角色'}`,
+      `Character Prompt: ${getCharacterPromptStats(requestMeta.includeCharacterInRequest)}`,
     ].join('\n'),
   );
   setBlock(reasoningEl, data.reasoning);
@@ -479,6 +555,7 @@ function clearConversation() {
   renderConversation();
   clearDebug();
   setStatus('未发送', 'idle');
+  resetCurrentConversationCharacterInjection();
   saveCurrentConversationState();
   userMessageInput.focus();
 }
@@ -510,11 +587,11 @@ function createOrUpdateCharacter() {
 
   if (activeCharacterId) {
     characters = characters.map((character) =>
-      character.id === activeCharacterId ? { ...character, name, prompt } : character,
+      character.id === activeCharacterId ? createCharacterRecord({ ...character, name, prompt }) : character,
     );
   } else {
     activeCharacterId = createId('character');
-    characters.push({ id: activeCharacterId, name, prompt });
+    characters.push(createCharacterRecord({ id: activeCharacterId, name, prompt }));
   }
 
   localStorage.setItem(CHARACTERS_KEY, JSON.stringify(characters));
@@ -553,6 +630,7 @@ function deleteCurrentCharacter() {
 
 async function sendMessage(messageText) {
   const currentCharacter = getActiveCharacter();
+  const includeCharacterInRequest = shouldInjectCharacterForCurrentConversation();
   const assistantMessage = {
     role: 'assistant',
     characterName: currentCharacter?.name || '助手',
@@ -572,7 +650,7 @@ async function sendMessage(messageText) {
     apiBaseUrl: form.elements.apiBaseUrl.value,
     apiKey: form.elements.apiKey.value,
     model: form.elements.model.value,
-    systemPrompt: buildEffectiveSystemPrompt(),
+    systemPrompt: buildEffectiveSystemPrompt({ includeCharacter: includeCharacterInRequest }),
     userMessage: messageText,
     messages: buildRequestMessages(),
   };
@@ -592,7 +670,7 @@ async function sendMessage(messageText) {
     });
 
     const data = await response.json();
-    updateDebug(data, response);
+    updateDebug(data, response, { includeCharacterInRequest });
     const errorMessage = extractErrorMessage(data, response);
 
     assistantMessage.pending = false;
@@ -606,6 +684,10 @@ async function sendMessage(messageText) {
 
     if (assistantMessage.reasoning || assistantMessage.error) {
       debugPanel.open = true;
+    }
+
+    if (data.ok) {
+      markActiveCharacterInjectedForCurrentConversation();
     }
 
     setStatus(data.ok ? '已完成' : '请求失败', data.ok ? 'success' : 'error');
