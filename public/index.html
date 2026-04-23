@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reasoning Chat Demo</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero card">
+        <div>
+          <p class="eyebrow">Reasoning Chat Demo</p>
+          <h1>更像聊天工具的测试页</h1>
+          <p class="muted">
+            主界面专注对话，连接配置和调试结果都保留在下方折叠区，默认不会打扰使用。
+          </p>
+        </div>
+        <div class="hero-actions">
+          <button id="new-chat-button" class="ghost-button" type="button">新对话</button>
+          <button id="toggle-settings-button" class="ghost-button" type="button">显示设置</button>
+        </div>
+      </section>
+
+      <section class="chat-shell card">
+        <header class="chat-header">
+          <div>
+            <h2>会话</h2>
+            <p id="conversation-subtitle" class="muted small">
+              发送一条消息开始测试
+            </p>
+          </div>
+          <span id="status-pill" class="status-pill idle">未发送</span>
+        </header>
+
+        <div id="chat-feed" class="chat-feed" aria-live="polite">
+          <section class="empty-state">
+            <p class="empty-state-title">准备好了</p>
+            <p class="muted">先在下方输入一句话试试。配置区和调试区都已经折叠起来了。</p>
+          </section>
+        </div>
+
+        <form id="chat-form" class="composer">
+          <label class="composer-label" for="userMessage">输入消息</label>
+          <textarea
+            id="userMessage"
+            name="userMessage"
+            rows="4"
+            placeholder="输入你的问题，然后按发送"
+            required
+          ></textarea>
+
+          <div class="composer-actions">
+            <span class="tip">`Shift + Enter` 换行，`Enter` 发送</span>
+            <button id="submit-button" type="submit">发送</button>
+          </div>
+
+          <details id="settings-panel" class="drawer">
+            <summary>连接设置与高级参数</summary>
+            <div class="drawer-body form-grid">
+              <label>
+                <span>API Mode</span>
+                <select id="apiMode" name="apiMode">
+                  <option value="chat_completions" selected>Chat Completions</option>
+                  <option value="responses">Responses API</option>
+                </select>
+              </label>
+
+              <label class="span-2">
+                <span>API Base URL</span>
+                <input
+                  id="apiBaseUrl"
+                  name="apiBaseUrl"
+                  type="text"
+                  placeholder="例如：https://api.example.com"
+                  required
+                />
+              </label>
+
+              <label class="span-2">
+                <span>API Key</span>
+                <input
+                  id="apiKey"
+                  name="apiKey"
+                  type="password"
+                  placeholder="填你的 API Key"
+                  required
+                />
+              </label>
+
+              <label>
+                <span>Model</span>
+                <input id="model" name="model" type="text" required />
+              </label>
+
+              <label>
+                <span>System Prompt</span>
+                <textarea
+                  id="systemPrompt"
+                  name="systemPrompt"
+                  rows="3"
+                  placeholder="可选，例如：你是一个简洁的中文助手。"
+                ></textarea>
+              </label>
+            </div>
+          </details>
+
+          <details id="debug-panel" class="drawer">
+            <summary>调试信息与原始响应</summary>
+            <div class="drawer-body debug-stack">
+              <section>
+                <h3>调试信息</h3>
+                <pre id="meta" class="result empty">暂无结果</pre>
+              </section>
+
+              <section>
+                <h3>思考内容</h3>
+                <pre id="reasoning" class="result empty">暂无结果</pre>
+              </section>
+
+              <section>
+                <h3>原始响应 JSON</h3>
+                <pre id="raw" class="result empty">暂无结果</pre>
+              </section>
+            </div>
+          </details>
+        </form>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
