@@ -66,6 +66,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'GET' && req.url === '/default-characters.json') {
+      await serveFile(res, 'default-characters.json', 'application/json; charset=utf-8');
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/api/chat') {
       const body = await readRequestBody(req);
       const result = await handleChatPayload(body);

@@ -2,6 +2,7 @@ const STORAGE_KEY = 'grok-demo-settings-v2';
 const SESSION_KEY = 'grok-demo-session-v1';
 const CHARACTERS_KEY = 'grok-demo-characters-v1';
 const CONVERSATIONS_KEY = 'grok-demo-conversations-v1';
+const DEFAULT_CHARACTERS_URL = '/default-characters.json';
 
 const form = document.querySelector('#chat-form');
 const submitButton = document.querySelector('#submit-button');
@@ -123,15 +124,20 @@ function togglePanel(panel) {
   openPanel(panel);
 }
 
-function getDefaultCharacters() {
-  return [
-    createCharacterRecord({
-      id: 'sample-gentle-companion',
-      name: '温柔陪聊',
-      prompt:
-        '你是一个自然、温柔、耐心的中文角色，擅长陪伴式对话。请保持口吻稳定、表达细腻，不要跳出角色，不要突然变成机械客服语气。',
-    }),
-  ];
+async function loadDefaultCharacters() {
+  try {
+    const response = await fetch(DEFAULT_CHARACTERS_URL);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const payload = await response.json();
+    return Array.isArray(payload) ? payload.map((item) => createCharacterRecord(item)) : [];
+  } catch (error) {
+    console.warn('Failed to load default characters:', error);
+    return [];
+  }
 }
 
 function setBlock(element, value) {
@@ -320,9 +326,6 @@ function createConversationRecord(seed = {}) {
     id: seed.id || createId('conversation'),
     title: seed.title || '新对话',
     messages: cloneMessages(seed.messages || []),
-    injectedCharacterSignatures: Array.isArray(seed.injectedCharacterSignatures)
-      ? [...new Set(seed.injectedCharacterSignatures.filter(Boolean))]
-      : [],
     createdAt: seed.createdAt || now,
     updatedAt: seed.updatedAt || now,
   };
@@ -363,56 +366,6 @@ function saveCurrentConversationState() {
   pruneEmptyConversations();
   persistConversations();
   renderConversationList();
-}
-
-function getActiveCharacterSignature() {
-  const activeCharacter = getActiveCharacter();
-
-  if (!activeCharacter?.id || !activeCharacter.prompt) {
-    return '';
-  }
-
-  return JSON.stringify({
-    id: activeCharacter.id,
-    name: activeCharacter.name,
-    prompt: activeCharacter.prompt,
-  });
-}
-
-function shouldInjectCharacterForCurrentConversation() {
-  const record = getCurrentConversationRecord();
-  const signature = getActiveCharacterSignature();
-
-  if (!record || !signature) {
-    return false;
-  }
-
-  return !record.injectedCharacterSignatures.includes(signature);
-}
-
-function markActiveCharacterInjectedForCurrentConversation() {
-  const record = getCurrentConversationRecord();
-  const signature = getActiveCharacterSignature();
-
-  if (!record || !signature) {
-    return;
-  }
-
-  if (!record.injectedCharacterSignatures.includes(signature)) {
-    record.injectedCharacterSignatures.push(signature);
-    persistConversations();
-  }
-}
-
-function resetCurrentConversationCharacterInjection() {
-  const record = getCurrentConversationRecord();
-
-  if (!record) {
-    return;
-  }
-
-  record.injectedCharacterSignatures = [];
-  persistConversations();
 }
 
 function loadConversationIntoView(record) {
@@ -520,12 +473,23 @@ function saveSettings() {
   sessionStorage.setItem(SESSION_KEY, JSON.stringify({ apiKey: form.elements.apiKey.value ?? '' }));
 }
 
-function loadCharacters() {
+async function loadCharacters() {
+  const defaultCharacters = await loadDefaultCharacters();
+
   try {
     const stored = JSON.parse(localStorage.getItem(CHARACTERS_KEY) || 'null');
 
     if (Array.isArray(stored) && stored.length) {
-      characters = stored.map((character) => createCharacterRecord(character));
+      const normalizedStored = stored.map((character) => createCharacterRecord(character));
+      const mergedCharacters = [...normalizedStored];
+
+      for (const defaultCharacter of defaultCharacters) {
+        if (!mergedCharacters.some((character) => character.id === defaultCharacter.id)) {
+          mergedCharacters.push(defaultCharacter);
+        }
+      }
+
+      characters = mergedCharacters;
       localStorage.setItem(CHARACTERS_KEY, JSON.stringify(characters));
       return;
     }
@@ -533,7 +497,7 @@ function loadCharacters() {
     // Ignore malformed local storage.
   }
 
-  characters = getDefaultCharacters();
+  characters = defaultCharacters;
   localStorage.setItem(CHARACTERS_KEY, JSON.stringify(characters));
 }
 
@@ -631,14 +595,14 @@ function buildRequestMessages() {
     }));
 }
 
-function getCharacterPromptStats(includeCharacterInRequest) {
+function getCharacterPromptStats() {
   const activeCharacter = getActiveCharacter();
 
   if (!activeCharacter) {
     return '无角色';
   }
 
-  return `${includeCharacterInRequest ? '本轮发送' : '本轮未发送'} · ${activeCharacter.prompt.length} 字`;
+  return `每轮发送 · ${activeCharacter.prompt.length} 字`;
 }
 
 function updateDebug(data, response, requestMeta = {}) {
@@ -651,7 +615,7 @@ function updateDebug(data, response, requestMeta = {}) {
       `Endpoint: ${data.endpoint ?? '-'}`,
       `Success: ${String(data.ok ?? response.ok)}`,
       `Character: ${getActiveCharacter()?.name || '无角色'}`,
-      `Character Prompt: ${getCharacterPromptStats(requestMeta.includeCharacterInRequest)}`,
+      `Character Prompt: ${getCharacterPromptStats()}`,
     ].join('\n'),
   );
   setBlock(reasoningEl, data.reasoning);
@@ -682,12 +646,37 @@ function clearDebug() {
   setBlock(rawEl, '');
 }
 
+function showConfigError(message, field) {
+  setStatus('配置缺失', 'error');
+  setBlock(metaEl, message);
+  setBlock(reasoningEl, '');
+  setBlock(rawEl, '');
+  openPanel(settingsPanel);
+  field?.focus();
+}
+
+function validateChatConfig() {
+  const apiBaseUrlInput = form.elements.apiBaseUrl;
+  const apiKeyInput = form.elements.apiKey;
+
+  if (!String(apiBaseUrlInput.value || '').trim()) {
+    showConfigError('请先在设置中填写 API Base URL。', apiBaseUrlInput);
+    return false;
+  }
+
+  if (!String(apiKeyInput.value || '').trim()) {
+    showConfigError('请先在设置中填写 API Key。', apiKeyInput);
+    return false;
+  }
+
+  return true;
+}
+
 function clearConversation() {
   conversation.length = 0;
   renderConversation();
   clearDebug();
   setStatus('未发送', 'idle');
-  resetCurrentConversationCharacterInjection();
   saveCurrentConversationState();
   userMessageInput.focus();
 }
@@ -771,7 +760,6 @@ async function requestAssistantResponse(messageText, { appendUserMessage = true 
   }
 
   const currentCharacter = getActiveCharacter();
-  const includeCharacterInRequest = shouldInjectCharacterForCurrentConversation();
   const assistantMessage = {
     role: 'assistant',
     characterName: currentCharacter?.name || '助手',
@@ -800,7 +788,7 @@ async function requestAssistantResponse(messageText, { appendUserMessage = true 
     apiBaseUrl: form.elements.apiBaseUrl.value,
     apiKey: form.elements.apiKey.value,
     model: form.elements.model.value,
-    systemPrompt: buildEffectiveSystemPrompt({ includeCharacter: includeCharacterInRequest }),
+    systemPrompt: buildEffectiveSystemPrompt(),
     userMessage: messageText,
     messages: buildRequestMessages(),
   };
@@ -815,7 +803,7 @@ async function requestAssistantResponse(messageText, { appendUserMessage = true 
     });
 
     const data = await response.json();
-    updateDebug(data, response, { includeCharacterInRequest });
+    updateDebug(data, response);
     const errorMessage = extractErrorMessage(data, response);
 
     assistantMessage.pending = false;
@@ -829,10 +817,6 @@ async function requestAssistantResponse(messageText, { appendUserMessage = true 
 
     if (assistantMessage.reasoning || assistantMessage.error) {
       openPanel(debugPanel);
-    }
-
-    if (data.ok) {
-      markActiveCharacterInjectedForCurrentConversation();
     }
 
     setStatus(data.ok ? '已完成' : '请求失败', data.ok ? 'success' : 'error');
@@ -874,6 +858,10 @@ async function retryLastResponse() {
     return;
   }
 
+  if (!validateChatConfig()) {
+    return;
+  }
+
   conversation.length = lastUserMessageIndex + 1;
   clearDebug();
   setStatus('未发送', 'idle');
@@ -902,6 +890,10 @@ form.addEventListener('submit', async (event) => {
 
   if (!messageText) {
     userMessageInput.focus();
+    return;
+  }
+
+  if (!validateChatConfig()) {
     return;
   }
 
@@ -984,17 +976,21 @@ deleteCharacterButton.addEventListener('click', () => {
   deleteCurrentCharacter();
 });
 
-loadCharacters();
-loadSettings();
-loadConversations();
-ensureConversationState();
-renderCharacterOptions();
-syncCharacterEditor();
-loadConversationIntoView(getCurrentConversationRecord());
-renderConversationList();
-renderConversation();
-setStatus(conversation.length ? '已恢复' : '未发送', conversation.length ? 'success' : 'idle');
-syncAllPanelToggleButtons();
-syncPanelOverlay();
-syncViewportHeight();
-saveSettings();
+async function initializeApp() {
+  await loadCharacters();
+  loadSettings();
+  loadConversations();
+  ensureConversationState();
+  renderCharacterOptions();
+  syncCharacterEditor();
+  loadConversationIntoView(getCurrentConversationRecord());
+  renderConversationList();
+  renderConversation();
+  setStatus(conversation.length ? '已恢复' : '未发送', conversation.length ? 'success' : 'idle');
+  syncAllPanelToggleButtons();
+  syncPanelOverlay();
+  syncViewportHeight();
+  saveSettings();
+}
+
+initializeApp();
