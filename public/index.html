@@ -104,6 +104,8 @@
           </div>
         </header>
 
+        <div id="panel-overlay" class="panel-overlay" hidden></div>
+
         <div id="chat-feed" class="chat-feed" aria-live="polite">
           <section class="empty-state">
             <p class="muted">开始聊天</p>
@@ -122,16 +124,41 @@
             <button id="submit-button" type="submit">发送</button>
           </div>
 
-          <details id="history-panel" class="drawer">
-            <summary>对话记录</summary>
-            <div class="drawer-body history-stack">
+          <section id="history-panel" class="panel-modal" hidden aria-labelledby="history-panel-title">
+            <div class="panel-modal-header">
+              <h2 id="history-panel-title" class="panel-modal-title">对话记录</h2>
+              <button
+                class="ghost-button panel-close-button"
+                type="button"
+                data-close-panel="history-panel"
+                aria-label="关闭对话记录"
+              >
+                关闭
+              </button>
+            </div>
+            <div class="panel-modal-body history-stack">
               <div id="conversation-list" class="history-list"></div>
             </div>
-          </details>
+          </section>
 
-          <details id="character-panel" class="drawer">
-            <summary>角色</summary>
-            <div class="drawer-body character-stack">
+          <section
+            id="character-panel"
+            class="panel-modal"
+            hidden
+            aria-labelledby="character-panel-title"
+          >
+            <div class="panel-modal-header">
+              <h2 id="character-panel-title" class="panel-modal-title">角色</h2>
+              <button
+                class="ghost-button panel-close-button"
+                type="button"
+                data-close-panel="character-panel"
+                aria-label="关闭角色面板"
+              >
+                关闭
+              </button>
+            </div>
+            <div class="panel-modal-body character-stack">
               <label>
                 <span>当前角色</span>
                 <select id="characterSelect" name="characterSelect">
@@ -171,11 +198,21 @@
                 ></textarea>
               </label>
             </div>
-          </details>
+          </section>
 
-          <details id="settings-panel" class="drawer">
-            <summary>连接设置与高级参数</summary>
-            <div class="drawer-body form-grid">
+          <section id="settings-panel" class="panel-modal" hidden aria-labelledby="settings-panel-title">
+            <div class="panel-modal-header">
+              <h2 id="settings-panel-title" class="panel-modal-title">连接设置与高级参数</h2>
+              <button
+                class="ghost-button panel-close-button"
+                type="button"
+                data-close-panel="settings-panel"
+                aria-label="关闭设置面板"
+              >
+                关闭
+              </button>
+            </div>
+            <div class="panel-modal-body form-grid">
               <label>
                 <span>API Mode</span>
                 <select id="apiMode" name="apiMode">
@@ -225,11 +262,21 @@
                 ></textarea>
               </label>
             </div>
-          </details>
+          </section>
 
-          <details id="debug-panel" class="drawer">
-            <summary>调试信息与原始响应</summary>
-            <div class="drawer-body debug-stack">
+          <section id="debug-panel" class="panel-modal" hidden aria-labelledby="debug-panel-title">
+            <div class="panel-modal-header">
+              <h2 id="debug-panel-title" class="panel-modal-title">调试信息与原始响应</h2>
+              <button
+                class="ghost-button panel-close-button"
+                type="button"
+                data-close-panel="debug-panel"
+                aria-label="关闭调试面板"
+              >
+                关闭
+              </button>
+            </div>
+            <div class="panel-modal-body debug-stack">
               <section>
                 <h3>调试信息</h3>
                 <pre id="meta" class="result empty">暂无结果</pre>
@@ -245,7 +292,7 @@
                 <pre id="raw" class="result empty">暂无结果</pre>
               </section>
             </div>
-          </details>
+          </section>
         </form>
       </section>
     </main>

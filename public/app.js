@@ -21,10 +21,12 @@ const toggleCharacterButton = document.querySelector('#toggle-character-button')
 const toggleSettingsButton = document.querySelector('#toggle-settings-button');
 const toggleDebugButton = document.querySelector('#toggle-debug-button');
 
+const panelOverlay = document.querySelector('#panel-overlay');
 const historyPanel = document.querySelector('#history-panel');
 const characterPanel = document.querySelector('#character-panel');
 const settingsPanel = document.querySelector('#settings-panel');
 const debugPanel = document.querySelector('#debug-panel');
+const panelCloseButtons = document.querySelectorAll('[data-close-panel]');
 
 const conversationList = document.querySelector('#conversation-list');
 
@@ -43,12 +45,65 @@ let characters = [];
 let activeCharacterId = '';
 let conversations = [];
 let currentConversationId = '';
+let isRequestInFlight = false;
 
 function syncPanelToggleButton(button, panel, label) {
-  const isOpen = panel.open;
+  const isOpen = !panel.hidden;
   button.setAttribute('aria-pressed', String(isOpen));
   button.title = isOpen ? `收起${label}` : label;
   button.setAttribute('aria-label', isOpen ? `收起${label}面板` : `切换${label}面板`);
+}
+
+function syncAllPanelToggleButtons() {
+  syncPanelToggleButton(toggleHistoryButton, historyPanel, '记录');
+  syncPanelToggleButton(toggleCharacterButton, characterPanel, '角色');
+  syncPanelToggleButton(toggleSettingsButton, settingsPanel, '设置');
+  syncPanelToggleButton(toggleDebugButton, debugPanel, '调试');
+}
+
+function isPanelOpen(panel) {
+  return !panel.hidden;
+}
+
+function getPanels() {
+  return [historyPanel, characterPanel, settingsPanel, debugPanel];
+}
+
+function syncPanelOverlay() {
+  panelOverlay.hidden = !getPanels().some((panel) => isPanelOpen(panel));
+}
+
+function closePanel(panel) {
+  panel.hidden = true;
+  syncPanelOverlay();
+  syncAllPanelToggleButtons();
+}
+
+function closeAllPanels({ except = null } = {}) {
+  for (const panel of getPanels()) {
+    if (panel !== except) {
+      panel.hidden = true;
+    }
+  }
+
+  syncPanelOverlay();
+  syncAllPanelToggleButtons();
+}
+
+function openPanel(panel) {
+  closeAllPanels({ except: panel });
+  panel.hidden = false;
+  syncPanelOverlay();
+  syncAllPanelToggleButtons();
+}
+
+function togglePanel(panel) {
+  if (isPanelOpen(panel)) {
+    closePanel(panel);
+    return;
+  }
+
+  openPanel(panel);
 }
 
 function getDefaultCharacters() {
@@ -124,7 +179,18 @@ function buildEffectiveSystemPrompt({ includeCharacter = true } = {}) {
   return parts.join('\n\n').trim();
 }
 
-function createMessageElement(message) {
+function getLastUserMessageIndex() {
+  for (let index = conversation.length - 1; index >= 0; index -= 1) {
+    if (conversation[index]?.role === 'user' && String(conversation[index].content || '').trim()) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function createMessageElement(message, options = {}) {
+  const { showRetryButton = false, retryDisabled = false } = options;
   const article = document.createElement('article');
   article.className = `message message-${message.role}`;
 
@@ -146,6 +212,23 @@ function createMessageElement(message) {
     ${reasoningBlock}
   `;
 
+  if (showRetryButton) {
+    const actions = document.createElement('div');
+    actions.className = 'message-actions';
+
+    const retryButton = document.createElement('button');
+    retryButton.type = 'button';
+    retryButton.className = 'message-retry-button';
+    retryButton.textContent = '重新回答';
+    retryButton.disabled = retryDisabled;
+    retryButton.addEventListener('click', () => {
+      retryLastResponse();
+    });
+
+    actions.append(retryButton);
+    article.append(actions);
+  }
+
   return article;
 }
 
@@ -161,8 +244,15 @@ function renderConversation() {
     return;
   }
 
-  for (const message of conversation) {
-    chatFeed.append(createMessageElement(message));
+  const lastUserMessageIndex = getLastUserMessageIndex();
+
+  for (const [index, message] of conversation.entries()) {
+    chatFeed.append(
+      createMessageElement(message, {
+        showRetryButton: index === lastUserMessageIndex,
+        retryDisabled: isRequestInFlight || message.pending,
+      }),
+    );
   }
 
   chatFeed.scrollTop = chatFeed.scrollHeight;
@@ -341,7 +431,7 @@ function renderConversationList() {
 
     button.addEventListener('click', () => {
       if (record.id === currentConversationId) {
-        historyPanel.open = false;
+        closePanel(historyPanel);
         userMessageInput.focus();
         return;
       }
@@ -353,7 +443,7 @@ function renderConversationList() {
       setStatus(record.messages.length ? '已恢复' : '未发送', record.messages.length ? 'success' : 'idle');
       saveSettings();
       renderConversationList();
-      historyPanel.open = false;
+      closePanel(historyPanel);
       userMessageInput.focus();
     });
 
@@ -515,6 +605,7 @@ function updateDebug(data, response, requestMeta = {}) {
     metaEl,
     [
       `API Mode: ${data.apiMode ?? 'chat_completions'}`,
+      `Model: ${form.elements.model?.value || '-'}`,
       `HTTP Status: ${data.status ?? response.status}`,
       `Endpoint: ${data.endpoint ?? '-'}`,
       `Success: ${String(data.ok ?? response.ok)}`,
@@ -629,6 +720,14 @@ function deleteCurrentCharacter() {
 }
 
 async function sendMessage(messageText) {
+  return requestAssistantResponse(messageText, { appendUserMessage: true });
+}
+
+async function requestAssistantResponse(messageText, { appendUserMessage = true } = {}) {
+  if (isRequestInFlight) {
+    return;
+  }
+
   const currentCharacter = getActiveCharacter();
   const includeCharacterInRequest = shouldInjectCharacterForCurrentConversation();
   const assistantMessage = {
@@ -640,8 +739,17 @@ async function sendMessage(messageText) {
     error: false,
   };
 
-  conversation.push({ role: 'user', content: messageText });
+  isRequestInFlight = true;
+
+  if (appendUserMessage) {
+    conversation.push({ role: 'user', content: messageText });
+  }
+
   conversation.push(assistantMessage);
+  submitButton.disabled = true;
+  submitButton.textContent = '发送中...';
+  setStatus('请求中', 'busy');
+  clearDebug();
   renderConversation();
   saveCurrentConversationState();
 
@@ -654,11 +762,6 @@ async function sendMessage(messageText) {
     userMessage: messageText,
     messages: buildRequestMessages(),
   };
-
-  submitButton.disabled = true;
-  submitButton.textContent = '发送中...';
-  setStatus('请求中', 'busy');
-  clearDebug();
 
   try {
     const response = await fetch('/api/chat', {
@@ -683,7 +786,7 @@ async function sendMessage(messageText) {
     assistantMessage.error = !response.ok || !data.ok;
 
     if (assistantMessage.reasoning || assistantMessage.error) {
-      debugPanel.open = true;
+      openPanel(debugPanel);
     }
 
     if (data.ok) {
@@ -702,13 +805,40 @@ async function sendMessage(messageText) {
     setBlock(reasoningEl, '');
     setBlock(rawEl, '');
     setStatus('请求失败', 'error');
-    debugPanel.open = true;
+    openPanel(debugPanel);
   } finally {
+    isRequestInFlight = false;
     renderConversation();
     saveCurrentConversationState();
     submitButton.disabled = false;
     submitButton.textContent = '发送';
   }
+}
+
+async function retryLastResponse() {
+  if (isRequestInFlight) {
+    return;
+  }
+
+  const lastUserMessageIndex = getLastUserMessageIndex();
+
+  if (lastUserMessageIndex === -1) {
+    return;
+  }
+
+  const messageText = String(conversation[lastUserMessageIndex].content || '').trim();
+
+  if (!messageText) {
+    return;
+  }
+
+  conversation.length = lastUserMessageIndex + 1;
+  clearDebug();
+  setStatus('未发送', 'idle');
+  renderConversation();
+  saveCurrentConversationState();
+  await requestAssistantResponse(messageText, { appendUserMessage: false });
+  userMessageInput.focus();
 }
 
 for (const field of settingsFields) {
@@ -749,35 +879,43 @@ clearChatButton.addEventListener('click', () => {
 });
 
 toggleHistoryButton.addEventListener('click', () => {
-  historyPanel.open = !historyPanel.open;
+  togglePanel(historyPanel);
 });
 
 toggleCharacterButton.addEventListener('click', () => {
-  characterPanel.open = !characterPanel.open;
+  togglePanel(characterPanel);
 });
 
 toggleSettingsButton.addEventListener('click', () => {
-  settingsPanel.open = !settingsPanel.open;
+  togglePanel(settingsPanel);
 });
 
 toggleDebugButton.addEventListener('click', () => {
-  debugPanel.open = !debugPanel.open;
+  togglePanel(debugPanel);
 });
 
-historyPanel.addEventListener('toggle', () => {
-  syncPanelToggleButton(toggleHistoryButton, historyPanel, '记录');
+panelOverlay.addEventListener('click', () => {
+  closeAllPanels();
 });
 
-characterPanel.addEventListener('toggle', () => {
-  syncPanelToggleButton(toggleCharacterButton, characterPanel, '角色');
-});
+for (const button of panelCloseButtons) {
+  button.addEventListener('click', () => {
+    const panel = document.querySelector(`#${button.dataset.closePanel}`);
 
-settingsPanel.addEventListener('toggle', () => {
-  syncPanelToggleButton(toggleSettingsButton, settingsPanel, '设置');
-});
+    if (!panel) {
+      return;
+    }
 
-debugPanel.addEventListener('toggle', () => {
-  syncPanelToggleButton(toggleDebugButton, debugPanel, '调试');
+    closePanel(panel);
+  });
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') {
+    return;
+  }
+
+  closeAllPanels();
 });
 
 characterSelect.addEventListener('change', () => {
@@ -810,8 +948,6 @@ loadConversationIntoView(getCurrentConversationRecord());
 renderConversationList();
 renderConversation();
 setStatus(conversation.length ? '已恢复' : '未发送', conversation.length ? 'success' : 'idle');
-syncPanelToggleButton(toggleHistoryButton, historyPanel, '记录');
-syncPanelToggleButton(toggleCharacterButton, characterPanel, '角色');
-syncPanelToggleButton(toggleSettingsButton, settingsPanel, '设置');
-syncPanelToggleButton(toggleDebugButton, debugPanel, '调试');
+syncAllPanelToggleButtons();
+syncPanelOverlay();
 saveSettings();
