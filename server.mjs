@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleChatPayload, serializeError } from './lib/chat-api.mjs';
@@ -7,6 +8,7 @@ import { handleChatPayload, serializeError } from './lib/chat-api.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.join(__dirname, 'public');
+const host = process.env.HOST || '0.0.0.0';
 const port = Number(process.env.PORT || 3210);
 
 function sendJson(res, statusCode, payload) {
@@ -30,6 +32,21 @@ async function serveFile(res, filename, contentType) {
   const content = await readFile(filePath);
   res.writeHead(200, { 'Content-Type': contentType });
   res.end(content);
+}
+
+function getLanUrls(port) {
+  const interfaces = os.networkInterfaces();
+  const urls = [];
+
+  for (const addresses of Object.values(interfaces)) {
+    for (const address of addresses || []) {
+      if (address.family === 'IPv4' && !address.internal) {
+        urls.push(`http://${address.address}:${port}`);
+      }
+    }
+  }
+
+  return urls;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -63,6 +80,16 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(port, '127.0.0.1', () => {
-  console.log(`Grok demo running at http://127.0.0.1:${port}`);
+server.listen(port, host, () => {
+  const localUrl = host === '0.0.0.0' ? `http://127.0.0.1:${port}` : `http://${host}:${port}`;
+  const lanUrls = host === '0.0.0.0' ? getLanUrls(port) : [];
+
+  console.log(`Grok demo running at ${localUrl}`);
+
+  if (lanUrls.length > 0) {
+    console.log('LAN access:');
+    for (const url of lanUrls) {
+      console.log(`  ${url}`);
+    }
+  }
 });

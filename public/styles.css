@@ -30,6 +30,7 @@ body {
     ui-sans-serif,
     system-ui,
     sans-serif;
+  font-size: 14px;
   color: var(--text);
   background: linear-gradient(180deg, #081018 0%, #0a1017 100%);
 }
@@ -54,8 +55,8 @@ body {
 }
 
 .chat-header {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 2px 2px 0;
@@ -66,7 +67,17 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+}
+
+.toolbar-left {
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.toolbar-actions {
+  flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 
 .toolbar-chip {
@@ -74,9 +85,13 @@ body {
   align-items: center;
   padding: 9px 12px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 10px;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.04);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .toolbar-chip.has-character {
@@ -101,8 +116,51 @@ button {
 
 .ghost-button {
   padding: 10px 12px;
+  font-size: 12px;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.04);
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.ghost-button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ghost-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.38);
+}
+
+.toolbar-icon-button {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 12px;
+}
+
+.toolbar-icon-button svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.toolbar-icon-button[aria-pressed='true'] {
+  color: #dbeafe;
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.24), rgba(59, 130, 246, 0.2));
+  box-shadow:
+    inset 0 0 0 1px rgba(147, 197, 253, 0.22),
+    0 8px 20px rgba(37, 99, 235, 0.22);
+}
+
+.toolbar-icon-button[aria-pressed='true']:hover {
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.3), rgba(59, 130, 246, 0.24));
 }
 
 .danger-button {
@@ -116,7 +174,7 @@ button {
   min-width: 72px;
   padding: 9px 12px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   background: rgba(255, 255, 255, 0.04);
   color: var(--muted);
@@ -140,7 +198,7 @@ button {
 .chat-feed {
   min-height: 0;
   overflow-y: auto;
-  padding: 14px;
+  padding: 8px;
   border-radius: 16px;
   background: rgba(5, 8, 13, 0.9);
   display: grid;
@@ -159,9 +217,9 @@ button {
 }
 
 .message {
-  max-width: min(80ch, 88%);
+  max-width: min(88ch, 94%);
   padding: 12px 14px;
-  border-radius: 18px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -175,27 +233,15 @@ button {
   background: linear-gradient(180deg, rgba(17, 24, 39, 0.94), rgba(30, 41, 59, 0.92));
 }
 
-.message-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
-}
-
-.message-role {
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .message-badges {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+  margin-bottom: 6px;
 }
 
 .message-badge {
-  font-size: 11px;
+  font-size: 9px;
   padding: 3px 7px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
@@ -208,6 +254,7 @@ button {
 }
 
 .message-body {
+  font-size: 13px;
   line-height: 1.6;
   word-break: break-word;
 }
@@ -226,7 +273,7 @@ button {
 
 .reasoning-copy {
   margin-top: 8px;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1.55;
   color: #d4def0;
 }
@@ -249,6 +296,45 @@ button {
   gap: 12px;
 }
 
+.history-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.history-item {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 12px;
+  border-radius: 14px;
+  color: var(--text);
+  background: rgba(5, 8, 13, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.history-item.active {
+  border-color: rgba(96, 165, 250, 0.46);
+  background: rgba(18, 32, 56, 0.96);
+}
+
+.history-title {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.history-meta,
+.history-preview,
+.history-empty {
+  font-size: 10px;
+  color: var(--muted);
+}
+
 .character-actions {
   display: flex;
   gap: 8px;
@@ -264,6 +350,7 @@ input,
 select,
 textarea {
   width: 100%;
+  font-size: 13px;
   color: var(--text);
   border: 1px solid var(--border);
   background: rgba(5, 8, 13, 0.9);
@@ -284,6 +371,7 @@ textarea {
 
 button:not(.ghost-button) {
   padding: 12px 16px;
+  font-size: 12px;
   font-weight: 700;
   color: #081018;
   background: linear-gradient(180deg, var(--accent-2), var(--accent));
@@ -310,7 +398,7 @@ button:disabled {
 .drawer summary {
   list-style: none;
   padding: 12px 14px;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .drawer summary::-webkit-details-marker {
@@ -338,7 +426,7 @@ button:disabled {
 
 .debug-stack section h3 {
   margin: 0 0 8px;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .result {
@@ -348,6 +436,7 @@ button:disabled {
   border-radius: 14px;
   background: rgba(5, 8, 13, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 12px;
   white-space: pre-wrap;
   word-break: break-word;
   font-family:
@@ -363,6 +452,10 @@ button:disabled {
 }
 
 @media (max-width: 760px) {
+  body {
+    font-size: 12px;
+  }
+
   .page {
     width: min(100% - 6px, 1440px);
     margin: 3px auto;
@@ -370,19 +463,137 @@ button:disabled {
 
   .chat-shell {
     min-height: calc(100vh - 8px);
-    padding: 8px;
+    padding: 6px 2px;
   }
 
   .chat-header {
-    align-items: flex-start;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .toolbar-left,
+  .toolbar-actions {
+    gap: 4px;
+  }
+
+  .ghost-button {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+
+  .toolbar-icon-button {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+  }
+
+  .toolbar-icon-button svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .status-pill,
+  .toolbar-chip {
+    padding: 7px 8px;
+    font-size: 9px;
+  }
+
+  .status-pill {
+    min-width: 0;
+  }
+
+  .toolbar-chip {
+    max-width: 84px;
+  }
+
+  .chat-feed {
+    padding: 6px;
+    gap: 8px;
   }
 
   .toolbar-actions {
     justify-content: flex-end;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .toolbar-actions::-webkit-scrollbar {
+    display: none;
   }
 
   .message {
     max-width: 100%;
+    padding: 6px 6px;
+  }
+
+  .message-body {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .message-badges {
+    margin-bottom: 4px;
+  }
+
+  .message-badge {
+    font-size: 8px;
+    padding: 2px 6px;
+  }
+
+  .history-item {
+    padding: 10px;
+  }
+
+  .history-title {
+    font-size: 11px;
+  }
+
+  .history-meta,
+  .history-preview,
+  .history-empty {
+    font-size: 9px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+
+  textarea {
+    min-height: 72px;
+    padding-right: 86px;
+    padding-bottom: 16px;
+  }
+
+  #characterPrompt {
+    min-height: 112px;
+    padding-right: 12px;
+  }
+
+  .composer-box > button {
+    right: 10px;
+    bottom: 10px;
+    min-width: 62px;
+    padding: 9px 12px;
+    font-size: 11px;
+  }
+
+  .drawer summary {
+    padding: 10px 12px;
+    font-size: 11px;
+  }
+
+  .drawer-body {
+    padding: 0 12px 12px;
+  }
+
+  .debug-stack section h3,
+  .result,
+  .reasoning-copy {
+    font-size: 11px;
   }
 
   .form-grid {

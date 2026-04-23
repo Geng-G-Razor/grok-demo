@@ -15,11 +15,92 @@
             <span id="active-character-chip" class="toolbar-chip">无角色</span>
           </div>
           <div class="toolbar-actions">
-            <button id="new-chat-button" class="ghost-button" type="button">新对话</button>
-            <button id="clear-chat-button" class="ghost-button" type="button">清空</button>
-            <button id="toggle-character-button" class="ghost-button" type="button">角色</button>
-            <button id="toggle-settings-button" class="ghost-button" type="button">设置</button>
-            <button id="toggle-debug-button" class="ghost-button" type="button">调试</button>
+            <button
+              id="new-chat-button"
+              class="ghost-button toolbar-icon-button"
+              type="button"
+              aria-label="新对话"
+              title="新对话"
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path
+                  d="M10 3.2a.8.8 0 0 1 .8.8v5.2H16a.8.8 0 1 1 0 1.6h-5.2V16a.8.8 0 1 1-1.6 0v-5.2H4a.8.8 0 1 1 0-1.6h5.2V4a.8.8 0 0 1 .8-.8Z"
+                />
+              </svg>
+            </button>
+            <button
+              id="clear-chat-button"
+              class="ghost-button toolbar-icon-button"
+              type="button"
+              aria-label="清空对话"
+              title="清空"
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path
+                  d="M7 3.8h6a1.7 1.7 0 0 1 1.7 1.7v.7H16a.8.8 0 1 1 0 1.6h-.6l-.7 7.4A2 2 0 0 1 12.7 17H7.3a2 2 0 0 1-2-1.8l-.7-7.4H4a.8.8 0 1 1 0-1.6h1.3v-.7A1.7 1.7 0 0 1 7 3.8Zm0 2.4h6v-.7a.1.1 0 0 0-.1-.1H7a.1.1 0 0 0-.1.1v.7Zm-.1 1.6.6 7.2a.4.4 0 0 0 .4.4h5.4a.4.4 0 0 0 .4-.4l.6-7.2H6.9Zm2 1.4a.8.8 0 0 1 .8.8v3.2a.8.8 0 1 1-1.6 0V10a.8.8 0 0 1 .8-.8Zm2.2 0a.8.8 0 0 1 .8.8v3.2a.8.8 0 1 1-1.6 0V10a.8.8 0 0 1 .8-.8Z"
+                />
+              </svg>
+            </button>
+            <button
+              id="toggle-history-button"
+              class="ghost-button toolbar-icon-button"
+              type="button"
+              aria-label="切换记录面板"
+              aria-controls="history-panel"
+              aria-pressed="false"
+              title="记录"
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path
+                  d="M4.5 3.5h8.8c1.2 0 2.2 1 2.2 2.2v9.8c0 .5-.5.8-.9.6l-2.2-1.4-2.2 1.4a.7.7 0 0 1-.8 0l-2.2-1.4-2.2 1.4c-.5.3-.9 0-.9-.6V5.7c0-1.2 1-2.2 2.2-2.2Zm1.4 3.3a.7.7 0 1 0 0 1.4h6.2a.7.7 0 1 0 0-1.4H5.9Zm0 3a.7.7 0 1 0 0 1.4h6.2a.7.7 0 1 0 0-1.4H5.9Z"
+                />
+              </svg>
+            </button>
+            <button
+              id="toggle-character-button"
+              class="ghost-button toolbar-icon-button"
+              type="button"
+              aria-label="切换角色面板"
+              aria-controls="character-panel"
+              aria-pressed="false"
+              title="角色"
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path
+                  d="M10 10.2a3.6 3.6 0 1 0 0-7.2 3.6 3.6 0 0 0 0 7.2Zm0 1.8c-3.5 0-6.4 1.9-7.2 4.7-.1.5.2 1 .7 1h13c.5 0 .9-.5.7-1-.8-2.8-3.7-4.7-7.2-4.7Z"
+                />
+              </svg>
+            </button>
+            <button
+              id="toggle-settings-button"
+              class="ghost-button toolbar-icon-button"
+              type="button"
+              aria-label="切换设置面板"
+              aria-controls="settings-panel"
+              aria-pressed="false"
+              title="设置"
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path
+                  d="M4 5.1a2.1 2.1 0 1 1 4.2 0A2.1 2.1 0 0 1 4 5.1Zm6 0c0-.4.3-.7.7-.7h5.3a.7.7 0 1 1 0 1.4h-5.3a.7.7 0 0 1-.7-.7ZM11.8 14.9a2.1 2.1 0 1 1 4.2 0 2.1 2.1 0 0 1-4.2 0Zm-8.5 0c0-.4.3-.7.7-.7h5.3a.7.7 0 1 1 0 1.4H4a.7.7 0 0 1-.7-.7ZM8.8 10a2.1 2.1 0 1 1 4.2 0 2.1 2.1 0 0 1-4.2 0Zm-5.5 0c0-.4.3-.7.7-.7h2.8a.7.7 0 1 1 0 1.4H4a.7.7 0 0 1-.7-.7Zm10 0c0-.4.3-.7.7-.7H16a.7.7 0 1 1 0 1.4H14a.7.7 0 0 1-.7-.7Z"
+                />
+              </svg>
+            </button>
+            <button
+              id="toggle-debug-button"
+              class="ghost-button toolbar-icon-button"
+              type="button"
+              aria-label="切换调试面板"
+              aria-controls="debug-panel"
+              aria-pressed="false"
+              title="调试"
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path
+                  d="M6.4 5.2a.8.8 0 0 1 0 1.1L3.7 9l2.7 2.7a.8.8 0 0 1-1.1 1.1l-3.3-3.3a.8.8 0 0 1 0-1.1l3.3-3.3a.8.8 0 0 1 1.1 0Zm7.2 0a.8.8 0 0 1 1.1 0l3.3 3.3a.8.8 0 0 1 0 1.1l-3.3 3.3a.8.8 0 1 1-1.1-1.1L16.3 9l-2.7-2.7a.8.8 0 0 1 0-1.1ZM10.9 4.5a.8.8 0 0 1 .6 1l-2 8a.8.8 0 1 1-1.6-.4l2-8a.8.8 0 0 1 1-.6Z"
+                />
+              </svg>
+            </button>
           </div>
         </header>
 
@@ -40,6 +121,13 @@
             ></textarea>
             <button id="submit-button" type="submit">发送</button>
           </div>
+
+          <details id="history-panel" class="drawer">
+            <summary>对话记录</summary>
+            <div class="drawer-body history-stack">
+              <div id="conversation-list" class="history-list"></div>
+            </div>
+          </details>
 
           <details id="character-panel" class="drawer">
             <summary>角色</summary>

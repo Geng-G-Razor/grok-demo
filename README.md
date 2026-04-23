@@ -5,14 +5,26 @@
 ## 本地启动
 
 ```zsh
-cd /Users/razor/codex/news-data/grok-demo
-node server.mjs
+cd /Users/razor/codex/grok-demo
+pnpm dev
 ```
 
 启动后打开：
 
 ```text
 http://127.0.0.1:3210
+```
+
+默认会监听 `0.0.0.0`，因此同一局域网内的手机也可以访问终端里打印出来的地址，例如：
+
+```text
+http://192.168.1.23:3210
+```
+
+如果你只想本机访问，可以显式指定：
+
+```zsh
+HOST=127.0.0.1 pnpm dev
 ```
 
 ## 项目结构

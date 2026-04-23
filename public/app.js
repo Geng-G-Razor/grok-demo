@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'grok-demo-settings-v2';
 const SESSION_KEY = 'grok-demo-session-v1';
 const CHARACTERS_KEY = 'grok-demo-characters-v1';
+const CONVERSATIONS_KEY = 'grok-demo-conversations-v1';
 
 const form = document.querySelector('#chat-form');
 const submitButton = document.querySelector('#submit-button');
@@ -15,13 +16,17 @@ const activeCharacterChip = document.querySelector('#active-character-chip');
 
 const newChatButton = document.querySelector('#new-chat-button');
 const clearChatButton = document.querySelector('#clear-chat-button');
+const toggleHistoryButton = document.querySelector('#toggle-history-button');
 const toggleCharacterButton = document.querySelector('#toggle-character-button');
 const toggleSettingsButton = document.querySelector('#toggle-settings-button');
 const toggleDebugButton = document.querySelector('#toggle-debug-button');
 
+const historyPanel = document.querySelector('#history-panel');
 const characterPanel = document.querySelector('#character-panel');
 const settingsPanel = document.querySelector('#settings-panel');
 const debugPanel = document.querySelector('#debug-panel');
+
+const conversationList = document.querySelector('#conversation-list');
 
 const characterSelect = document.querySelector('#characterSelect');
 const characterNameInput = document.querySelector('#characterName');
@@ -32,9 +37,19 @@ const deleteCharacterButton = document.querySelector('#delete-character-button')
 
 const settingsFields = ['apiMode', 'apiBaseUrl', 'model', 'systemPrompt'];
 const conversation = [];
+const availableModels = ['grok-3', 'grok-4.1', 'grok-4'];
+
 let characters = [];
 let activeCharacterId = '';
-const availableModels = ['grok-3', 'grok-4.1', 'grok-4'];
+let conversations = [];
+let currentConversationId = '';
+
+function syncPanelToggleButton(button, panel, label) {
+  const isOpen = panel.open;
+  button.setAttribute('aria-pressed', String(isOpen));
+  button.title = isOpen ? `收起${label}` : label;
+  button.setAttribute('aria-label', isOpen ? `收起${label}面板` : `切换${label}面板`);
+}
 
 function getDefaultCharacters() {
   return [
@@ -69,6 +84,12 @@ function getActiveCharacter() {
   return characters.find((character) => character.id === activeCharacterId) || null;
 }
 
+function updateActiveCharacterChip() {
+  const activeCharacter = getActiveCharacter();
+  activeCharacterChip.textContent = activeCharacter ? activeCharacter.name : '无角色';
+  activeCharacterChip.classList.toggle('has-character', Boolean(activeCharacter));
+}
+
 function buildEffectiveSystemPrompt() {
   const manualPrompt = String(form.elements.systemPrompt.value || '').trim();
   const activeCharacter = getActiveCharacter();
@@ -96,8 +117,6 @@ function createMessageElement(message) {
   const article = document.createElement('article');
   article.className = `message message-${message.role}`;
 
-  const label =
-    message.role === 'user' ? '你' : message.characterName || getActiveCharacter()?.name || '助手';
   const content = message.content || (message.pending ? '正在等待响应...' : '空响应');
   const reasoningBlock =
     message.reasoning && message.role === 'assistant'
@@ -105,15 +124,13 @@ function createMessageElement(message) {
       : '';
   const errorBadge = message.error ? '<span class="message-badge error">失败</span>' : '';
   const pendingBadge = message.pending ? '<span class="message-badge">响应中</span>' : '';
+  const badges =
+    pendingBadge || errorBadge
+      ? `<div class="message-badges">${pendingBadge}${errorBadge}</div>`
+      : '';
 
   article.innerHTML = `
-    <div class="message-head">
-      <span class="message-role">${label}</span>
-      <div class="message-badges">
-        ${pendingBadge}
-        ${errorBadge}
-      </div>
-    </div>
+    ${badges}
     <div class="message-body">${renderParagraphs(content)}</div>
     ${reasoningBlock}
   `;
@@ -145,22 +162,245 @@ function setStatus(text, type = 'idle') {
   statusPill.className = `status-pill ${type}`;
 }
 
-function createCharacterId() {
+function createId(prefix) {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
   }
 
-  return `character-${Date.now()}`;
+  return `${prefix}-${Date.now()}`;
 }
 
-function persistCharacters() {
+function createConversationTitle(messages) {
+  const firstUserMessage = messages.find(
+    (message) => message.role === 'user' && String(message.content || '').trim(),
+  );
+
+  if (!firstUserMessage) {
+    return '新对话';
+  }
+
+  return String(firstUserMessage.content).replace(/\s+/g, ' ').trim().slice(0, 24) || '新对话';
+}
+
+function cloneMessages(messages) {
+  return messages.map((message) => ({
+    ...message,
+    pending: false,
+    content:
+      message.pending && !message.content ? '上次请求未完成，已停止继续等待。' : message.content || '',
+  }));
+}
+
+function createConversationRecord(seed = {}) {
+  const now = new Date().toISOString();
+
+  return {
+    id: seed.id || createId('conversation'),
+    title: seed.title || '新对话',
+    messages: cloneMessages(seed.messages || []),
+    createdAt: seed.createdAt || now,
+    updatedAt: seed.updatedAt || now,
+  };
+}
+
+function getCurrentConversationRecord() {
+  return conversations.find((item) => item.id === currentConversationId) || null;
+}
+
+function persistConversations() {
+  localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversations));
+}
+
+function saveCurrentConversationState() {
+  const record = getCurrentConversationRecord();
+
+  if (!record) {
+    return;
+  }
+
+  const messages = cloneMessages(conversation);
+  record.messages = messages;
+  record.updatedAt = new Date().toISOString();
+  record.title = createConversationTitle(messages);
+  persistConversations();
+  renderConversationList();
+}
+
+function loadConversationIntoView(record) {
+  conversation.length = 0;
+  conversation.push(...cloneMessages(record.messages || []));
+  renderConversation();
+}
+
+function formatConversationTime(value) {
+  try {
+    return new Date(value).toLocaleString('zh-CN', {
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '';
+  }
+}
+
+function renderConversationList() {
+  conversationList.innerHTML = '';
+
+  if (!conversations.length) {
+    conversationList.innerHTML = '<p class="history-empty">暂无对话记录</p>';
+    return;
+  }
+
+  const sorted = [...conversations].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+  );
+
+  for (const record of sorted) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'history-item';
+    button.dataset.id = record.id;
+    button.classList.toggle('active', record.id === currentConversationId);
+
+    const previewSource = record.messages.find((message) => message.role === 'user')?.content || '';
+    const preview = String(previewSource).replace(/\s+/g, ' ').trim().slice(0, 40) || '空白对话';
+
+    button.innerHTML = `
+      <span class="history-title">${escapeHtml(record.title || '新对话')}</span>
+      <span class="history-meta">${escapeHtml(
+        `${formatConversationTime(record.updatedAt)} · ${record.messages.length} 条消息`,
+      )}</span>
+      <span class="history-preview">${escapeHtml(preview)}</span>
+    `;
+
+    button.addEventListener('click', () => {
+      if (record.id === currentConversationId) {
+        historyPanel.open = false;
+        userMessageInput.focus();
+        return;
+      }
+
+      saveCurrentConversationState();
+      currentConversationId = record.id;
+      loadConversationIntoView(record);
+      clearDebug();
+      setStatus(record.messages.length ? '已恢复' : '未发送', record.messages.length ? 'success' : 'idle');
+      saveSettings();
+      renderConversationList();
+      historyPanel.open = false;
+      userMessageInput.focus();
+    });
+
+    conversationList.append(button);
+  }
+}
+
+function ensureConversationState() {
+  if (!conversations.length) {
+    const record = createConversationRecord();
+    conversations = [record];
+    currentConversationId = record.id;
+    persistConversations();
+    return;
+  }
+
+  const existing = conversations.find((item) => item.id === currentConversationId);
+
+  if (!existing) {
+    const sorted = [...conversations].sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+    currentConversationId = sorted[0]?.id || conversations[0].id;
+  }
+}
+
+function saveSettings() {
+  const payload = { activeCharacterId, currentConversationId };
+
+  for (const field of settingsFields) {
+    payload[field] = form.elements[field]?.value ?? '';
+  }
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify({ apiKey: form.elements.apiKey.value ?? '' }));
+}
+
+function loadCharacters() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(CHARACTERS_KEY) || 'null');
+
+    if (Array.isArray(stored) && stored.length) {
+      characters = stored;
+      return;
+    }
+  } catch {
+    // Ignore malformed local storage.
+  }
+
+  characters = getDefaultCharacters();
   localStorage.setItem(CHARACTERS_KEY, JSON.stringify(characters));
 }
 
-function updateActiveCharacterChip() {
-  const activeCharacter = getActiveCharacter();
-  activeCharacterChip.textContent = activeCharacter ? activeCharacter.name : '无角色';
-  activeCharacterChip.classList.toggle('has-character', Boolean(activeCharacter));
+function loadConversations() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(CONVERSATIONS_KEY) || 'null');
+
+    if (Array.isArray(stored) && stored.length) {
+      conversations = stored.map((item) => createConversationRecord(item));
+      return;
+    }
+  } catch {
+    // Ignore malformed local storage.
+  }
+
+  conversations = [];
+}
+
+function loadSettings() {
+  const defaults = {
+    apiMode: 'chat_completions',
+    apiBaseUrl: '',
+    apiKey: '',
+    model: 'grok-3',
+    systemPrompt: '',
+    activeCharacterId: '',
+    currentConversationId: '',
+  };
+
+  let stored = {};
+  let sessionStored = {};
+
+  try {
+    stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+  } catch {
+    stored = {};
+  }
+
+  try {
+    sessionStored = JSON.parse(sessionStorage.getItem(SESSION_KEY) || '{}');
+  } catch {
+    sessionStored = {};
+  }
+
+  const merged = { ...defaults, ...stored };
+  if (!availableModels.includes(merged.model)) {
+    merged.model = defaults.model;
+  }
+
+  activeCharacterId = merged.activeCharacterId || '';
+  currentConversationId = merged.currentConversationId || '';
+
+  for (const field of settingsFields) {
+    if (form.elements[field]) {
+      form.elements[field].value = merged[field] ?? '';
+    }
+  }
+
+  if (form.elements.apiKey) {
+    form.elements.apiKey.value = sessionStored.apiKey ?? '';
+  }
 }
 
 function renderCharacterOptions() {
@@ -184,75 +424,6 @@ function syncCharacterEditor() {
   characterNameInput.value = activeCharacter?.name || '';
   characterPromptInput.value = activeCharacter?.prompt || '';
   deleteCharacterButton.disabled = !activeCharacter;
-}
-
-function saveSettings() {
-  const payload = { activeCharacterId };
-
-  for (const field of settingsFields) {
-    payload[field] = form.elements[field]?.value ?? '';
-  }
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify({ apiKey: form.elements.apiKey.value ?? '' }));
-}
-
-function loadCharacters() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(CHARACTERS_KEY) || 'null');
-
-    if (Array.isArray(stored) && stored.length) {
-      characters = stored;
-      return;
-    }
-  } catch {
-    // Ignore malformed local storage.
-  }
-
-  characters = getDefaultCharacters();
-  persistCharacters();
-}
-
-function loadSettings() {
-  const defaults = {
-    apiMode: 'chat_completions',
-    apiBaseUrl: '',
-    apiKey: '',
-    model: 'grok-3',
-    systemPrompt: '',
-    activeCharacterId: '',
-  };
-
-  let stored = {};
-  let sessionStored = {};
-
-  try {
-    stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-  } catch {
-    stored = {};
-  }
-
-  try {
-    sessionStored = JSON.parse(sessionStorage.getItem(SESSION_KEY) || '{}');
-  } catch {
-    sessionStored = {};
-  }
-
-  const merged = { ...defaults, ...stored };
-  if (!availableModels.includes(merged.model)) {
-    merged.model = defaults.model;
-  }
-  activeCharacterId = merged.activeCharacterId || '';
-
-  for (const field of settingsFields) {
-    if (form.elements[field]) {
-      form.elements[field].value = merged[field] ?? '';
-    }
-  }
-
-  if (form.elements.apiKey) {
-    form.elements.apiKey.value = sessionStored.apiKey ?? '';
-  }
 }
 
 function buildRequestMessages() {
@@ -308,6 +479,23 @@ function clearConversation() {
   renderConversation();
   clearDebug();
   setStatus('未发送', 'idle');
+  saveCurrentConversationState();
+  userMessageInput.focus();
+}
+
+function startNewConversation() {
+  saveCurrentConversationState();
+
+  const record = createConversationRecord();
+  conversations.push(record);
+  currentConversationId = record.id;
+
+  conversation.length = 0;
+  renderConversation();
+  renderConversationList();
+  clearDebug();
+  setStatus('未发送', 'idle');
+  saveSettings();
   userMessageInput.focus();
 }
 
@@ -325,11 +513,11 @@ function createOrUpdateCharacter() {
       character.id === activeCharacterId ? { ...character, name, prompt } : character,
     );
   } else {
-    activeCharacterId = createCharacterId();
+    activeCharacterId = createId('character');
     characters.push({ id: activeCharacterId, name, prompt });
   }
 
-  persistCharacters();
+  localStorage.setItem(CHARACTERS_KEY, JSON.stringify(characters));
   renderCharacterOptions();
   syncCharacterEditor();
   saveSettings();
@@ -357,7 +545,7 @@ function deleteCurrentCharacter() {
 
   characters = characters.filter((character) => character.id !== activeCharacterId);
   activeCharacterId = '';
-  persistCharacters();
+  localStorage.setItem(CHARACTERS_KEY, JSON.stringify(characters));
   renderCharacterOptions();
   syncCharacterEditor();
   saveSettings();
@@ -377,6 +565,7 @@ async function sendMessage(messageText) {
   conversation.push({ role: 'user', content: messageText });
   conversation.push(assistantMessage);
   renderConversation();
+  saveCurrentConversationState();
 
   const payload = {
     apiMode: form.elements.apiMode.value,
@@ -434,6 +623,7 @@ async function sendMessage(messageText) {
     debugPanel.open = true;
   } finally {
     renderConversation();
+    saveCurrentConversationState();
     submitButton.disabled = false;
     submitButton.textContent = '发送';
   }
@@ -469,11 +659,15 @@ form.addEventListener('submit', async (event) => {
 });
 
 newChatButton.addEventListener('click', () => {
-  clearConversation();
+  startNewConversation();
 });
 
 clearChatButton.addEventListener('click', () => {
   clearConversation();
+});
+
+toggleHistoryButton.addEventListener('click', () => {
+  historyPanel.open = !historyPanel.open;
 });
 
 toggleCharacterButton.addEventListener('click', () => {
@@ -488,16 +682,20 @@ toggleDebugButton.addEventListener('click', () => {
   debugPanel.open = !debugPanel.open;
 });
 
+historyPanel.addEventListener('toggle', () => {
+  syncPanelToggleButton(toggleHistoryButton, historyPanel, '记录');
+});
+
 characterPanel.addEventListener('toggle', () => {
-  toggleCharacterButton.textContent = characterPanel.open ? '收起角色' : '角色';
+  syncPanelToggleButton(toggleCharacterButton, characterPanel, '角色');
 });
 
 settingsPanel.addEventListener('toggle', () => {
-  toggleSettingsButton.textContent = settingsPanel.open ? '收起设置' : '设置';
+  syncPanelToggleButton(toggleSettingsButton, settingsPanel, '设置');
 });
 
 debugPanel.addEventListener('toggle', () => {
-  toggleDebugButton.textContent = debugPanel.open ? '收起调试' : '调试';
+  syncPanelToggleButton(toggleDebugButton, debugPanel, '调试');
 });
 
 characterSelect.addEventListener('change', () => {
@@ -522,7 +720,16 @@ deleteCharacterButton.addEventListener('click', () => {
 
 loadCharacters();
 loadSettings();
+loadConversations();
+ensureConversationState();
 renderCharacterOptions();
 syncCharacterEditor();
+loadConversationIntoView(getCurrentConversationRecord());
+renderConversationList();
 renderConversation();
-setStatus('未发送', 'idle');
+setStatus(conversation.length ? '已恢复' : '未发送', conversation.length ? 'success' : 'idle');
+syncPanelToggleButton(toggleHistoryButton, historyPanel, '记录');
+syncPanelToggleButton(toggleCharacterButton, characterPanel, '角色');
+syncPanelToggleButton(toggleSettingsButton, settingsPanel, '设置');
+syncPanelToggleButton(toggleDebugButton, debugPanel, '调试');
+saveSettings();
