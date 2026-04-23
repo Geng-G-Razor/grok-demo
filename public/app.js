@@ -1,5 +1,6 @@
 const STORAGE_KEY = 'grok-demo-settings-v2';
 const SESSION_KEY = 'grok-demo-session-v1';
+const CHARACTERS_KEY = 'grok-demo-characters-v1';
 
 const form = document.querySelector('#chat-form');
 const submitButton = document.querySelector('#submit-button');
@@ -10,15 +11,41 @@ const reasoningEl = document.querySelector('#reasoning');
 const metaEl = document.querySelector('#meta');
 const rawEl = document.querySelector('#raw');
 const statusPill = document.querySelector('#status-pill');
-const conversationSubtitle = document.querySelector('#conversation-subtitle');
+const activeCharacterChip = document.querySelector('#active-character-chip');
 
 const newChatButton = document.querySelector('#new-chat-button');
+const clearChatButton = document.querySelector('#clear-chat-button');
+const toggleCharacterButton = document.querySelector('#toggle-character-button');
 const toggleSettingsButton = document.querySelector('#toggle-settings-button');
+const toggleDebugButton = document.querySelector('#toggle-debug-button');
+
+const characterPanel = document.querySelector('#character-panel');
 const settingsPanel = document.querySelector('#settings-panel');
 const debugPanel = document.querySelector('#debug-panel');
 
+const characterSelect = document.querySelector('#characterSelect');
+const characterNameInput = document.querySelector('#characterName');
+const characterPromptInput = document.querySelector('#characterPrompt');
+const newCharacterButton = document.querySelector('#new-character-button');
+const saveCharacterButton = document.querySelector('#save-character-button');
+const deleteCharacterButton = document.querySelector('#delete-character-button');
+
 const settingsFields = ['apiMode', 'apiBaseUrl', 'model', 'systemPrompt'];
 const conversation = [];
+let characters = [];
+let activeCharacterId = '';
+const availableModels = ['grok-3', 'grok-4.1', 'grok-4'];
+
+function getDefaultCharacters() {
+  return [
+    {
+      id: 'sample-gentle-companion',
+      name: '温柔陪聊',
+      prompt:
+        '你是一个自然、温柔、耐心的中文角色，擅长陪伴式对话。请保持口吻稳定、表达细腻，不要跳出角色，不要突然变成机械客服语气。',
+    },
+  ];
+}
 
 function setBlock(element, value) {
   element.textContent = value || '暂无结果';
@@ -38,11 +65,39 @@ function renderParagraphs(value) {
   return escapeHtml(value).replaceAll('\n', '<br />');
 }
 
+function getActiveCharacter() {
+  return characters.find((character) => character.id === activeCharacterId) || null;
+}
+
+function buildEffectiveSystemPrompt() {
+  const manualPrompt = String(form.elements.systemPrompt.value || '').trim();
+  const activeCharacter = getActiveCharacter();
+  const parts = [];
+
+  if (activeCharacter?.prompt) {
+    parts.push(
+      [
+        '请始终稳定扮演以下角色，不要跳出设定。',
+        `角色名：${activeCharacter.name}`,
+        '角色设定：',
+        activeCharacter.prompt,
+      ].join('\n'),
+    );
+  }
+
+  if (manualPrompt) {
+    parts.push(manualPrompt);
+  }
+
+  return parts.join('\n\n').trim();
+}
+
 function createMessageElement(message) {
   const article = document.createElement('article');
   article.className = `message message-${message.role}`;
 
-  const label = message.role === 'user' ? '你' : '助手';
+  const label =
+    message.role === 'user' ? '你' : message.characterName || getActiveCharacter()?.name || '助手';
   const content = message.content || (message.pending ? '正在等待响应...' : '空响应');
   const reasoningBlock =
     message.reasoning && message.role === 'assistant'
@@ -72,15 +127,11 @@ function renderConversation() {
   if (!conversation.length) {
     chatFeed.innerHTML = `
       <section class="empty-state">
-        <p class="empty-state-title">准备好了</p>
-        <p class="muted">先在下方输入一句话试试。配置区和调试区都已经折叠起来了。</p>
+        <p class="muted">开始聊天</p>
       </section>
     `;
-    conversationSubtitle.textContent = '发送一条消息开始测试';
     return;
   }
-
-  conversationSubtitle.textContent = `当前共 ${conversation.length} 条消息`;
 
   for (const message of conversation) {
     chatFeed.append(createMessageElement(message));
@@ -94,8 +145,49 @@ function setStatus(text, type = 'idle') {
   statusPill.className = `status-pill ${type}`;
 }
 
+function createCharacterId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `character-${Date.now()}`;
+}
+
+function persistCharacters() {
+  localStorage.setItem(CHARACTERS_KEY, JSON.stringify(characters));
+}
+
+function updateActiveCharacterChip() {
+  const activeCharacter = getActiveCharacter();
+  activeCharacterChip.textContent = activeCharacter ? activeCharacter.name : '无角色';
+  activeCharacterChip.classList.toggle('has-character', Boolean(activeCharacter));
+}
+
+function renderCharacterOptions() {
+  characterSelect.innerHTML = '<option value="">无角色</option>';
+
+  for (const character of characters) {
+    const option = document.createElement('option');
+    option.value = character.id;
+    option.textContent = character.name;
+    characterSelect.append(option);
+  }
+
+  characterSelect.value = activeCharacterId || '';
+  updateActiveCharacterChip();
+}
+
+function syncCharacterEditor() {
+  const activeCharacter = getActiveCharacter();
+
+  characterSelect.value = activeCharacterId || '';
+  characterNameInput.value = activeCharacter?.name || '';
+  characterPromptInput.value = activeCharacter?.prompt || '';
+  deleteCharacterButton.disabled = !activeCharacter;
+}
+
 function saveSettings() {
-  const payload = {};
+  const payload = { activeCharacterId };
 
   for (const field of settingsFields) {
     payload[field] = form.elements[field]?.value ?? '';
@@ -105,13 +197,30 @@ function saveSettings() {
   sessionStorage.setItem(SESSION_KEY, JSON.stringify({ apiKey: form.elements.apiKey.value ?? '' }));
 }
 
+function loadCharacters() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(CHARACTERS_KEY) || 'null');
+
+    if (Array.isArray(stored) && stored.length) {
+      characters = stored;
+      return;
+    }
+  } catch {
+    // Ignore malformed local storage.
+  }
+
+  characters = getDefaultCharacters();
+  persistCharacters();
+}
+
 function loadSettings() {
   const defaults = {
     apiMode: 'chat_completions',
     apiBaseUrl: '',
     apiKey: '',
-    model: 'grok-4.20-0309-reasoning',
+    model: 'grok-3',
     systemPrompt: '',
+    activeCharacterId: '',
   };
 
   let stored = {};
@@ -130,6 +239,10 @@ function loadSettings() {
   }
 
   const merged = { ...defaults, ...stored };
+  if (!availableModels.includes(merged.model)) {
+    merged.model = defaults.model;
+  }
+  activeCharacterId = merged.activeCharacterId || '';
 
   for (const field of settingsFields) {
     if (form.elements[field]) {
@@ -159,10 +272,29 @@ function updateDebug(data, response) {
       `HTTP Status: ${data.status ?? response.status}`,
       `Endpoint: ${data.endpoint ?? '-'}`,
       `Success: ${String(data.ok ?? response.ok)}`,
+      `Character: ${getActiveCharacter()?.name || '无角色'}`,
     ].join('\n'),
   );
   setBlock(reasoningEl, data.reasoning);
   setBlock(rawEl, JSON.stringify(data.data ?? data, null, 2));
+}
+
+function extractErrorMessage(data, response) {
+  const nestedMessage =
+    data?.data?.error?.message ||
+    data?.error?.message ||
+    data?.data?.message ||
+    data?.message;
+
+  if (nestedMessage) {
+    return String(nestedMessage);
+  }
+
+  if (response && !response.ok) {
+    return `请求失败（HTTP ${data?.status ?? response.status}）`;
+  }
+
+  return '';
 }
 
 function clearDebug() {
@@ -171,9 +303,71 @@ function clearDebug() {
   setBlock(rawEl, '');
 }
 
+function clearConversation() {
+  conversation.length = 0;
+  renderConversation();
+  clearDebug();
+  setStatus('未发送', 'idle');
+  userMessageInput.focus();
+}
+
+function createOrUpdateCharacter() {
+  const name = characterNameInput.value.trim();
+  const prompt = characterPromptInput.value.trim();
+
+  if (!name || !prompt) {
+    window.alert('请先填写角色名和角色设定。');
+    return;
+  }
+
+  if (activeCharacterId) {
+    characters = characters.map((character) =>
+      character.id === activeCharacterId ? { ...character, name, prompt } : character,
+    );
+  } else {
+    activeCharacterId = createCharacterId();
+    characters.push({ id: activeCharacterId, name, prompt });
+  }
+
+  persistCharacters();
+  renderCharacterOptions();
+  syncCharacterEditor();
+  saveSettings();
+}
+
+function resetCharacterEditor() {
+  activeCharacterId = '';
+  syncCharacterEditor();
+  updateActiveCharacterChip();
+  saveSettings();
+}
+
+function deleteCurrentCharacter() {
+  const activeCharacter = getActiveCharacter();
+
+  if (!activeCharacter) {
+    return;
+  }
+
+  const confirmed = window.confirm(`确定删除角色“${activeCharacter.name}”吗？`);
+
+  if (!confirmed) {
+    return;
+  }
+
+  characters = characters.filter((character) => character.id !== activeCharacterId);
+  activeCharacterId = '';
+  persistCharacters();
+  renderCharacterOptions();
+  syncCharacterEditor();
+  saveSettings();
+}
+
 async function sendMessage(messageText) {
+  const currentCharacter = getActiveCharacter();
   const assistantMessage = {
     role: 'assistant',
+    characterName: currentCharacter?.name || '助手',
     content: '',
     reasoning: '',
     pending: true,
@@ -189,7 +383,7 @@ async function sendMessage(messageText) {
     apiBaseUrl: form.elements.apiBaseUrl.value,
     apiKey: form.elements.apiKey.value,
     model: form.elements.model.value,
-    systemPrompt: form.elements.systemPrompt.value,
+    systemPrompt: buildEffectiveSystemPrompt(),
     userMessage: messageText,
     messages: buildRequestMessages(),
   };
@@ -210,15 +404,18 @@ async function sendMessage(messageText) {
 
     const data = await response.json();
     updateDebug(data, response);
+    const errorMessage = extractErrorMessage(data, response);
 
     assistantMessage.pending = false;
     assistantMessage.content =
       data.answer ||
-      (data.ok ? '模型已完成响应，但正文为空。你可以展开下方调试面板继续看原始返回。' : '请求失败');
+      (data.ok
+        ? '模型已完成响应，但正文为空。你可以展开下方调试面板继续看原始返回。'
+        : errorMessage || '请求失败');
     assistantMessage.reasoning = data.reasoning || '';
     assistantMessage.error = !response.ok || !data.ok;
 
-    if (assistantMessage.reasoning) {
+    if (assistantMessage.reasoning || assistantMessage.error) {
       debugPanel.open = true;
     }
 
@@ -272,21 +469,60 @@ form.addEventListener('submit', async (event) => {
 });
 
 newChatButton.addEventListener('click', () => {
-  conversation.length = 0;
-  renderConversation();
-  clearDebug();
-  setStatus('未发送', 'idle');
-  userMessageInput.focus();
+  clearConversation();
+});
+
+clearChatButton.addEventListener('click', () => {
+  clearConversation();
+});
+
+toggleCharacterButton.addEventListener('click', () => {
+  characterPanel.open = !characterPanel.open;
 });
 
 toggleSettingsButton.addEventListener('click', () => {
   settingsPanel.open = !settingsPanel.open;
 });
 
-settingsPanel.addEventListener('toggle', () => {
-  toggleSettingsButton.textContent = settingsPanel.open ? '隐藏设置' : '显示设置';
+toggleDebugButton.addEventListener('click', () => {
+  debugPanel.open = !debugPanel.open;
 });
 
+characterPanel.addEventListener('toggle', () => {
+  toggleCharacterButton.textContent = characterPanel.open ? '收起角色' : '角色';
+});
+
+settingsPanel.addEventListener('toggle', () => {
+  toggleSettingsButton.textContent = settingsPanel.open ? '收起设置' : '设置';
+});
+
+debugPanel.addEventListener('toggle', () => {
+  toggleDebugButton.textContent = debugPanel.open ? '收起调试' : '调试';
+});
+
+characterSelect.addEventListener('change', () => {
+  activeCharacterId = characterSelect.value;
+  syncCharacterEditor();
+  updateActiveCharacterChip();
+  saveSettings();
+});
+
+newCharacterButton.addEventListener('click', () => {
+  resetCharacterEditor();
+  characterNameInput.focus();
+});
+
+saveCharacterButton.addEventListener('click', () => {
+  createOrUpdateCharacter();
+});
+
+deleteCharacterButton.addEventListener('click', () => {
+  deleteCurrentCharacter();
+});
+
+loadCharacters();
 loadSettings();
+renderCharacterOptions();
+syncCharacterEditor();
 renderConversation();
 setStatus('未发送', 'idle');

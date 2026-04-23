@@ -8,52 +8,82 @@
   </head>
   <body>
     <main class="page">
-      <section class="hero card">
-        <div>
-          <p class="eyebrow">Reasoning Chat Demo</p>
-          <h1>更像聊天工具的测试页</h1>
-          <p class="muted">
-            主界面专注对话，连接配置和调试结果都保留在下方折叠区，默认不会打扰使用。
-          </p>
-        </div>
-        <div class="hero-actions">
-          <button id="new-chat-button" class="ghost-button" type="button">新对话</button>
-          <button id="toggle-settings-button" class="ghost-button" type="button">显示设置</button>
-        </div>
-      </section>
-
       <section class="chat-shell card">
         <header class="chat-header">
-          <div>
-            <h2>会话</h2>
-            <p id="conversation-subtitle" class="muted small">
-              发送一条消息开始测试
-            </p>
+          <div class="toolbar-left">
+            <span id="status-pill" class="status-pill idle">未发送</span>
+            <span id="active-character-chip" class="toolbar-chip">无角色</span>
           </div>
-          <span id="status-pill" class="status-pill idle">未发送</span>
+          <div class="toolbar-actions">
+            <button id="new-chat-button" class="ghost-button" type="button">新对话</button>
+            <button id="clear-chat-button" class="ghost-button" type="button">清空</button>
+            <button id="toggle-character-button" class="ghost-button" type="button">角色</button>
+            <button id="toggle-settings-button" class="ghost-button" type="button">设置</button>
+            <button id="toggle-debug-button" class="ghost-button" type="button">调试</button>
+          </div>
         </header>
 
         <div id="chat-feed" class="chat-feed" aria-live="polite">
           <section class="empty-state">
-            <p class="empty-state-title">准备好了</p>
-            <p class="muted">先在下方输入一句话试试。配置区和调试区都已经折叠起来了。</p>
+            <p class="muted">开始聊天</p>
           </section>
         </div>
 
         <form id="chat-form" class="composer">
-          <label class="composer-label" for="userMessage">输入消息</label>
-          <textarea
-            id="userMessage"
-            name="userMessage"
-            rows="4"
-            placeholder="输入你的问题，然后按发送"
-            required
-          ></textarea>
-
-          <div class="composer-actions">
-            <span class="tip">`Shift + Enter` 换行，`Enter` 发送</span>
+          <div class="composer-box">
+            <textarea
+              id="userMessage"
+              name="userMessage"
+              rows="3"
+              placeholder="输入消息"
+              required
+            ></textarea>
             <button id="submit-button" type="submit">发送</button>
           </div>
+
+          <details id="character-panel" class="drawer">
+            <summary>角色</summary>
+            <div class="drawer-body character-stack">
+              <label>
+                <span>当前角色</span>
+                <select id="characterSelect" name="characterSelect">
+                  <option value="">无角色</option>
+                </select>
+              </label>
+
+              <div class="character-actions">
+                <button id="new-character-button" class="ghost-button" type="button">新建</button>
+                <button id="save-character-button" class="ghost-button" type="button">保存</button>
+                <button
+                  id="delete-character-button"
+                  class="ghost-button danger-button"
+                  type="button"
+                >
+                  删除
+                </button>
+              </div>
+
+              <label>
+                <span>角色名</span>
+                <input
+                  id="characterName"
+                  name="characterName"
+                  type="text"
+                  placeholder="例如：温柔姐姐 / 冷静分析师"
+                />
+              </label>
+
+              <label>
+                <span>角色设定</span>
+                <textarea
+                  id="characterPrompt"
+                  name="characterPrompt"
+                  rows="5"
+                  placeholder="例如：你是一个温柔、克制、会照顾人的中文角色，说话自然，不要跳出角色。"
+                ></textarea>
+              </label>
+            </div>
+          </details>
 
           <details id="settings-panel" class="drawer">
             <summary>连接设置与高级参数</summary>
@@ -90,7 +120,11 @@
 
               <label>
                 <span>Model</span>
-                <input id="model" name="model" type="text" required />
+                <select id="model" name="model" required>
+                  <option value="grok-3">grok-3</option>
+                  <option value="grok-4.1">grok-4.1</option>
+                  <option value="grok-4">grok-4</option>
+                </select>
               </label>
 
               <label>
