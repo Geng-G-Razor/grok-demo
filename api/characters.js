@@ -22,7 +22,7 @@ export default {
     try {
       const access = await getAuthenticatedAccess(request.headers.get('cookie'));
 
-      if (isAccessAuthEnabled() && !access) {
+      if ((await isAccessAuthEnabled()) && !access) {
         return json({ ok: false, error: '需要先输入访问密码' }, { status: 401 });
       }
 

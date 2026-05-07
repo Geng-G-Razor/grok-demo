@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node server.mjs"
+    "dev": "node server.mjs",
+    "access-user": "node scripts/access-user.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["better-sqlite3"]

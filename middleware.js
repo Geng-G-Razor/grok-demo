@@ -1,5 +1,5 @@
 import { next } from '@vercel/functions';
-import { getAccessPassword, isCookieAuthenticated } from './lib/access-auth.mjs';
+import { isAccessAuthEnabled, isCookieAuthenticated } from './lib/access-auth.mjs';
 
 const PUBLIC_PATHS = new Set(['/login.html', '/api/auth']);
 
@@ -23,9 +23,7 @@ function redirectToLogin(request, url) {
 }
 
 export default async function middleware(request) {
-  const password = getAccessPassword();
-
-  if (!password) {
+  if (!(await isAccessAuthEnabled())) {
     return next();
   }
 
@@ -35,7 +33,7 @@ export default async function middleware(request) {
     return next();
   }
 
-  const authenticated = await isCookieAuthenticated(request.headers.get('cookie'), password);
+  const authenticated = await isCookieAuthenticated(request.headers.get('cookie'));
 
   if (authenticated) {
     return next();

@@ -2,7 +2,7 @@ import {
   buildAuthCookie,
   buildClearAuthCookie,
   createAccessAuthToken,
-  findAccessUserByPassword,
+  findAccessUserByCredentials,
   getAccessUsers,
   getAuthenticatedAccess,
 } from '../lib/access-auth.mjs';
@@ -21,7 +21,7 @@ async function readJson(request) {
 
 export default {
   async fetch(request) {
-    const authEnabled = getAccessUsers().length > 0;
+    const authEnabled = (await getAccessUsers()).length > 0;
 
     if (!authEnabled) {
       return json({ ok: true, authRequired: false, authenticated: true, accessId: 'public' });
@@ -54,10 +54,10 @@ export default {
     }
 
     const body = await readJson(request);
-    const accessUser = findAccessUserByPassword(body.password);
+    const accessUser = await findAccessUserByCredentials(body.username, body.password);
 
     if (!accessUser) {
-      return json({ ok: false, error: '访问密码不正确' }, { status: 401 });
+      return json({ ok: false, error: '账号或密码不正确' }, { status: 401 });
     }
 
     const token = await createAccessAuthToken(accessUser);

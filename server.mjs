@@ -144,7 +144,7 @@ async function handleWebEndpoint(req, res, endpoint) {
 }
 
 async function ensureAccessAllowed(req, res, pathname, search) {
-  if (!isAccessAuthEnabled()) {
+  if (!(await isAccessAuthEnabled())) {
     return true;
   }
 

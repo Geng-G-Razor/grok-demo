@@ -87,25 +87,44 @@ Vercel 官方当前文档说明：
 4. 如果需要访问密码，在 Vercel Project Settings 的 Environment Variables 里添加 `APP_PASSWORD`
 5. 直接部署
 
-### 访问密码
+### 账号访问
 
-设置 `APP_PASSWORD` 后，站点会先显示访问验证页；验证成功后浏览器会收到一个 HttpOnly Cookie，后续页面与 `/api/chat` 请求才会放行。
+本地或 VPS 使用 SQLite 时，可以把账号写入 `.data/razor-chat.db` 的 `access_users` 表。站点会先显示登录页；验证成功后浏览器会收到一个 HttpOnly Cookie，后续页面与 `/api/chat` 请求才会放行。
 
-本地调试：
+添加或更新账号：
 
 ```zsh
-APP_PASSWORD=your-password pnpm dev
+pnpm access-user add admin 'your-password'
 ```
 
-多套访问密码可以使用 `APP_PASSWORDS_JSON`。每个 `id` 会对应独立的聊天记录存储：
+查看当前账号：
+
+```zsh
+pnpm access-user list
+```
+
+`access_users.id` 会作为数据隔离 scope，例如 `admin` 账号会写入 SQLite 中的 `admin` scope。账号密码默认保存为 PBKDF2 哈希；如果确实要手动 SQL 插入，可以先生成哈希：
+
+```zsh
+pnpm access-user hash 'your-password'
+```
+
+然后写入 `id`、`username`、`password_hash`。不建议使用明文 `password` 字段，它只用于兼容或临时导入。
+
+```sql
+INSERT INTO access_users (id, username, password_hash)
+VALUES ('admin', 'admin', '上一步生成的哈希');
+```
+
+仍然兼容旧的环境变量方式，适合 Vercel 这种没有本地 SQLite 的部署。每个 `id` 同样会对应独立的聊天记录存储：
 
 ```zsh
 APP_PASSWORD='main-password' \
-APP_PASSWORDS_JSON='[{"id":"guest","password":"guest-password"}]' \
+APP_PASSWORDS_JSON='[{"id":"guest","username":"guest","password":"guest-password"}]' \
 pnpm dev
 ```
 
-其中 `APP_PASSWORD` 对应默认身份 `default`，会写入 SQLite 中的 `default` scope；`guest` 会写入 SQLite 中的 `guest` scope。如果使用 Upstash Redis，则会使用不同的 Redis key 后缀隔离。
+其中 `APP_PASSWORD` 对应默认身份 `default`，登录时账号填写 `default`。如果使用 Upstash Redis，则会使用不同的 Redis key 后缀隔离。
 
 Vercel CLI 设置：
 
@@ -124,7 +143,7 @@ vercel env add APP_PASSWORD production --sensitive
 .data/razor-chat.db
 ```
 
-多套访问密码会按身份 ID 隔离，例如 `admin` 身份会写入 SQLite 中的 `admin` scope。
+多账号会按身份 ID 隔离，例如 `admin` 身份会写入 SQLite 中的 `admin` scope。
 
 旧版 `.data/conversations*.json`、`.data/characters*.json`、`.data/profiles.json` 在首次访问时会自动迁移到 SQLite，迁移后本地存储统一走数据库。
 
@@ -165,6 +184,14 @@ scripts/vps-db.zsh pull
 ```zsh
 OPEN_AFTER_PULL=1 scripts/vps-db.zsh pull
 ```
+
+如果已经在本地修改完数据库，想安全回传到 VPS：
+
+```zsh
+scripts/vps-db.zsh push /absolute/path/to/edited.db
+```
+
+这个命令会先校验本地数据库完整性，然后上传到 VPS，停止 `grok-demo.service`，备份当前线上库，替换 `razor-chat.db`，清理旧的 `-wal/-shm`，最后重启服务。
 
 首次使用如果 VPS 上还没有 `sqlite3`，先安装：
 

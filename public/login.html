@@ -59,6 +59,10 @@
         font-weight: 650;
       }
 
+      label + label {
+        margin-top: 14px;
+      }
+
       input,
       button {
         width: 100%;
@@ -102,11 +106,15 @@
   <body>
     <main>
       <h1>访问验证</h1>
-      <p>请输入访问密码后继续使用。</p>
+      <p>请输入账号和密码后继续使用。</p>
       <form id="login-form">
         <label>
-          访问密码
-          <input id="password" name="password" type="password" autocomplete="current-password" required autofocus />
+          账号
+          <input id="username" name="username" type="text" autocomplete="username" required autofocus />
+        </label>
+        <label>
+          密码
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
         </label>
         <button id="submit-button" type="submit">进入</button>
         <div id="error" class="error" role="alert"></div>
@@ -115,6 +123,7 @@
 
     <script>
       const form = document.querySelector('#login-form');
+      const usernameInput = document.querySelector('#username');
       const passwordInput = document.querySelector('#password');
       const submitButton = document.querySelector('#submit-button');
       const errorBox = document.querySelector('#error');
@@ -130,7 +139,7 @@
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ password: passwordInput.value }),
+            body: JSON.stringify({ username: usernameInput.value, password: passwordInput.value }),
           });
           const data = await response.json();
 
