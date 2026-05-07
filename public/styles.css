@@ -536,21 +536,57 @@ button {
   gap: 8px;
 }
 
-.history-item {
+.history-row {
   width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+
+}
+
+.history-row.active {
+  background: linear-gradient(180deg, var(--accent-2), var(--success));
+}
+
+.history-item {
+  min-width: 0;
   display: grid;
   gap: 4px;
   text-align: left;
-  padding: 12px;
-  border-radius: 14px;
+  padding: 8px;
+  border-radius: 10px;
   color: var(--text);
-  background: rgba(5, 8, 13, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: transparent;
 }
 
-.history-item.active {
-  border-color: rgba(96, 165, 250, 0.46);
-  background: rgba(18, 32, 56, 0.96);
+.history-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.history-delete-button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #fecdd3;
+}
+
+.history-delete-button:hover {
+  color: #ffe4e6;
+  background: rgba(244, 63, 94, 0.16);
+}
+
+.history-delete-button svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
 }
 
 .history-title {
@@ -628,7 +664,6 @@ button:not(.ghost-button):not(.message-retry-button) {
   font-size: 12px;
   font-weight: 700;
   color: #081018;
-  background: linear-gradient(180deg, var(--accent-2), var(--accent));
 }
 
 button:disabled {
@@ -852,8 +887,18 @@ button:disabled {
     padding: 2px 6px;
   }
 
+  .history-row {
+    gap: 6px;
+    padding: 3px;
+  }
+
   .history-item {
-    padding: 10px;
+    padding: 7px;
+  }
+
+  .history-delete-button {
+    width: 30px;
+    height: 30px;
   }
 
   .history-title {

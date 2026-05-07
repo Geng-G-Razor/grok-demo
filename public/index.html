@@ -87,11 +87,18 @@
             <div class="panel-modal-body history-stack">
               <div class="history-list">
                 <p v-if="!visibleConversations.length" class="history-empty">暂无对话记录</p>
-                <button v-for="record in sortedConversations" :key="record.id" type="button" class="history-item" :class="{ active: record.id === currentConversationId }" @click="selectConversation(record)">
-                  <span class="history-title">{{ record.title || '新对话' }}</span>
-                  <span class="history-meta">{{ formatConversationTime(record.updatedAt) }} · {{ record.messages.length }} 条消息</span>
-                  <span class="history-preview">{{ getConversationPreview(record) }}</span>
-                </button>
+                <div v-for="record in sortedConversations" :key="record.id" class="history-row" :class="{ active: record.id === currentConversationId }">
+                  <button type="button" class="history-item" @click="selectConversation(record)">
+                    <span class="history-title">{{ record.title || '新对话' }}</span>
+                    <span class="history-meta" style="color: #333">{{ formatConversationTime(record.updatedAt) }} · {{ record.messages.length }} 条消息</span>
+                    <span class="history-preview" v-if="false">{{ getConversationPreview(record) }}</span>
+                  </button>
+                  <button class="ghost-button history-delete-button" type="button" :aria-label="`删除对话：${record.title || '新对话'}`" title="删除" @click="deleteConversation(record)">
+                    <svg viewBox="0 0 20 20" aria-hidden="true">
+                      <path d="M7 3.8h6a1.7 1.7 0 0 1 1.7 1.7v.7H16a.8.8 0 1 1 0 1.6h-.6l-.7 7.4A2 2 0 0 1 12.7 17H7.3a2 2 0 0 1-2-1.8l-.7-7.4H4a.8.8 0 1 1 0-1.6h1.3v-.7A1.7 1.7 0 0 1 7 3.8Zm0 2.4h6v-.7a.1.1 0 0 0-.1-.1H7a.1.1 0 0 0-.1.1v.7Zm-.1 1.6.6 7.2a.4.4 0 0 0 .4.4h5.4a.4.4 0 0 0 .4-.4l.6-7.2H6.9Zm2 1.4a.8.8 0 0 1 .8.8v3.2a.8.8 0 1 1-1.6 0V10a.8.8 0 0 1 .8-.8Zm2.2 0a.8.8 0 0 1 .8.8v3.2a.8.8 0 1 1-1.6 0V10a.8.8 0 0 1 .8-.8Z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           </section>

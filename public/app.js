@@ -1128,6 +1128,41 @@ createApp({
       this.closeAllPanels();
     },
 
+    deleteConversation(record) {
+      if (!record) {
+        return;
+      }
+
+      const title = record.title || '新对话';
+      const confirmed = window.confirm(`确定删除对话“${title}”吗？`);
+
+      if (!confirmed) {
+        return;
+      }
+
+      const isCurrentConversation = record.id === this.currentConversationId;
+      this.conversations = this.conversations.filter((item) => item.id !== record.id);
+
+      if (isCurrentConversation) {
+        let nextRecord = [...this.conversations].sort(
+          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+        )[0];
+
+        if (!nextRecord) {
+          nextRecord = createConversationRecord();
+          this.conversations = [nextRecord];
+        }
+
+        this.currentConversationId = nextRecord.id;
+        this.loadConversationIntoView(nextRecord);
+        this.clearDebug();
+        this.setStatus(nextRecord.messages.length ? '已恢复' : '未发送', nextRecord.messages.length ? 'success' : 'idle');
+      }
+
+      this.persistConversations();
+      this.saveSettings();
+    },
+
     startNewConversation() {
       this.saveCurrentConversationState();
       this.pruneEmptyConversations({ keepCurrent: false });
