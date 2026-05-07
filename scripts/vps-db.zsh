@@ -17,6 +17,7 @@ REMOTE_DB_PATH="${REMOTE_DB_DIR}/${REMOTE_DB_NAME}"
 REMOTE_BACKUP_NAME="razor-chat-backup-${TIMESTAMP}.db"
 REMOTE_BACKUP_PATH="${REMOTE_DB_DIR}/${REMOTE_BACKUP_NAME}"
 LOCAL_BACKUP_PATH="${LOCAL_DIR}/${REMOTE_BACKUP_NAME}"
+LOCAL_WORKING_DB_PATH="${LOCAL_DIR}/${REMOTE_DB_NAME}"
 REMOTE_UPLOAD_NAME="razor-chat-upload-${TIMESTAMP}.db"
 REMOTE_UPLOAD_PATH="${REMOTE_DB_DIR}/${REMOTE_UPLOAD_NAME}"
 REMOTE_REPLACEMENT_BACKUP_NAME="razor-chat-before-replace-${TIMESTAMP}.db"
@@ -84,17 +85,19 @@ ls -lh '${REMOTE_BACKUP_PATH}'
 "
 
   scp "${SSH_TARGET}:${REMOTE_BACKUP_PATH}" "${LOCAL_BACKUP_PATH}"
+  cp "${LOCAL_BACKUP_PATH}" "${LOCAL_WORKING_DB_PATH}"
 
   if [[ "${KEEP_REMOTE_BACKUP}" != "1" ]]; then
     ssh "${SSH_TARGET}" "rm -f '${REMOTE_BACKUP_PATH}'"
   fi
 
   if [[ "${OPEN_AFTER_PULL}" == "1" ]]; then
-    open -R "${LOCAL_BACKUP_PATH}"
+    open -R "${LOCAL_WORKING_DB_PATH}"
   fi
 
-  echo "Downloaded backup:"
-  echo "  ${LOCAL_BACKUP_PATH}"
+  echo "Downloaded backup and working copy:"
+  echo "  backup:  ${LOCAL_BACKUP_PATH}"
+  echo "  working: ${LOCAL_WORKING_DB_PATH}"
   exit 0
 fi
 

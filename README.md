@@ -177,7 +177,14 @@ CONVERSATIONS_STORE_KEY=grok-demo:conversations:v1
 scripts/vps-db.zsh pull
 ```
 
-默认会从 `my-vps-2:/home/ubuntu/apps/grok-demo/.data/razor-chat.db` 生成一致性备份，并下载到本地 `.remote-db/` 目录。
+默认会从 `my-vps-2:/home/ubuntu/apps/grok-demo/.data/razor-chat.db` 生成一致性备份，并下载到本地 `.remote-db/` 目录。每次会保留两份：
+
+```text
+.remote-db/razor-chat-backup-YYYYMMDD-HHMMSS.db
+.remote-db/razor-chat.db
+```
+
+其中带时间戳的是备份，固定名 `razor-chat.db` 是后续编辑和上传用的工作库。
 
 如果希望下载后直接在 Finder 里定位文件：
 
