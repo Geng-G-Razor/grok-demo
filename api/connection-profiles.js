@@ -1,5 +1,7 @@
 import {
   getConnectionProfiles,
+  maskProfileApiKeys,
+  mergeProfilesWithExisting,
   normalizeProfiles,
   setConnectionProfiles,
 } from '../lib/connection-profile-store.mjs';
@@ -31,7 +33,7 @@ export default {
       if (request.method === 'GET') {
         const result = await getConnectionProfiles({ accountId });
 
-        return json({ ok: true, ...result });
+        return json({ ok: true, ...result, profiles: maskProfileApiKeys(result.profiles) });
       }
 
       if (request.method !== 'PUT' && request.method !== 'POST') {
@@ -39,9 +41,11 @@ export default {
       }
 
       const body = await readJson(request);
-      const result = await setConnectionProfiles(normalizeProfiles(body.profiles), { accountId });
+      const existing = await getConnectionProfiles({ accountId });
+      const profiles = mergeProfilesWithExisting(normalizeProfiles(body.profiles), existing.profiles);
+      const result = await setConnectionProfiles(profiles, { accountId });
 
-      return json({ ok: true, ...result });
+      return json({ ok: true, ...result, profiles: maskProfileApiKeys(result.profiles) });
     } catch (error) {
       const status = error.statusCode || 500;
 

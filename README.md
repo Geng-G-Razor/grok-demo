@@ -46,7 +46,7 @@ HOST=127.0.0.1 pnpm dev
 
 - 使用 Vue 3 管理聊天、角色、连接配置和调试面板状态
 - 前端填写 `API Base URL`、`API Key`、`Model`
-- 首次打开时会加载项目自带连接配置；已有浏览器本地配置时会合并新增项
+- 连接配置、角色和对话记录以服务端存储为准；浏览器本地只保存当前选中项等 UI 状态
 - 支持两种模式：
   - `/v1/chat/completions`
   - `/v1/responses`
@@ -135,15 +135,17 @@ vercel env add APP_PASSWORD production --sensitive
 
 如果未设置 `APP_PASSWORD`，站点保持无密码访问，方便本地快速调试。
 
-### 聊天记录同步
+### 服务端数据存储
 
-聊天记录、角色列表和连接配置会同步到服务端。VPS 部署时，如果没有配置 Upstash Redis，会自动写入 `.data/razor-chat.db`：
+聊天记录、角色列表和连接配置会保存到服务端。VPS 部署时，如果没有配置 Upstash Redis，会自动写入 `.data/razor-chat.db`：
 
 ```text
 .data/razor-chat.db
 ```
 
 多账号会按账号 ID 隔离，例如 `admin` 身份会写入 SQLite 中的 `account_id = 'admin'`。
+
+浏览器的 `localStorage` 只保留当前角色、当前连接配置、当前对话等界面状态，不再保存 API Key、对话正文、角色设定或连接配置明细。连接配置接口返回时会隐藏 API Key；聊天请求只传连接配置 ID，由服务端读取数据库里的 API Key 后调用模型接口。
 
 旧版 `.data/conversations*.json`、`.data/characters*.json`、`.data/profiles.json` 在首次访问时会自动迁移到 SQLite，迁移后本地存储统一走数据库。
 
@@ -211,4 +213,5 @@ ssh my-vps-2 "sudo apt-get update && sudo apt-get install -y sqlite3"
 - 这是一个 BYOK 页面，用户会在前端输入自己的 API Key
 - 访问密码能阻止未授权访客打开页面或调用 `/api/chat`
 - 如果部署在 Vercel 且未配置 Upstash Redis，聊天记录、角色和连接配置同步接口会提示存储未配置
-- 如果把自己的 API Key 写进前端代码、静态 JSON 或浏览器存储，仍然会暴露；真正隐藏 Key 需要改为服务端环境变量读取
+- 不要把自己的 API Key 写进前端代码或静态 JSON；API Key 保存后只应由服务端存储和读取
+- 默认不允许 `/api/chat` 使用前端临时传入的 `apiBaseUrl/apiKey`，需要先保存连接配置。若确实要恢复旧的调试模式，可设置 `ALLOW_CLIENT_CHAT_CONFIG=true`

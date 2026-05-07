@@ -175,12 +175,12 @@
 
               <label class="span-2">
                 <span>API Base URL</span>
-                <input v-model="settingsDraft.apiBaseUrl" type="text" placeholder="例如：https://api.example.com" required @input="saveSettings" />
+                <input v-model="settingsDraft.apiBaseUrl" type="text" placeholder="例如：https://api.example.com" @input="saveSettings" />
               </label>
 
               <label class="span-2">
                 <span>API Key</span>
-                <input v-model="settingsDraft.apiKey" type="password" placeholder="填你的 API Key" required />
+                <input v-model="settingsDraft.apiKey" type="password" :placeholder="currentConnectionProfile?.hasApiKey ? '已保存，留空保持不变' : '填你的 API Key'" />
               </label>
 
               <label>

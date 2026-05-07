@@ -98,6 +98,7 @@ function createConnectionProfileRecord(seed = {}) {
     apiMode: seed.apiMode === 'responses' ? 'responses' : 'chat_completions',
     apiBaseUrl: String(seed.apiBaseUrl || '').trim(),
     apiKey: String(seed.apiKey || ''),
+    hasApiKey: seed.hasApiKey === true || Boolean(seed.apiKey),
     model,
     systemPrompt: String(seed.systemPrompt || ''),
     createdAt: seed.createdAt || now,
@@ -294,13 +295,14 @@ createApp({
 
   async mounted() {
     await this.loadAuthContext();
+    this.clearLegacyUserDataStorage();
     await this.loadCharacters();
     await this.loadRemoteCharacters();
     await this.loadConnectionProfiles();
-    this.loadSettings();
+    await this.loadRemoteConnectionProfiles();
     this.loadConversations();
     await this.loadRemoteConversations();
-    await this.loadRemoteConnectionProfiles();
+    this.loadSettings();
     this.ensureConversationState();
     this.syncCharacterEditor();
     this.loadConversationIntoView(this.getCurrentConversationRecord());
@@ -334,6 +336,25 @@ createApp({
   },
 
   methods: {
+    clearLegacyUserDataStorage() {
+      const dataPrefixes = [CONVERSATIONS_KEY, CHARACTERS_KEY, CONNECTION_PROFILES_KEY];
+      const storageKeys = new Set();
+
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index);
+
+        if (dataPrefixes.some((prefix) => key === prefix || key?.startsWith(`${prefix}:`))) {
+          storageKeys.add(key);
+        }
+      }
+
+      for (const key of storageKeys) {
+        localStorage.removeItem(key);
+      }
+
+      sessionStorage.removeItem(SESSION_KEY);
+    },
+
     conversationStorageKey() {
       const accountId = String(this.authContext.accountId || 'public');
 
@@ -390,11 +411,8 @@ createApp({
       } catch (error) {
         console.warn('Failed to logout:', error);
       } finally {
-        sessionStorage.removeItem(SESSION_KEY);
         localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem(this.conversationStorageKey());
-        localStorage.removeItem(this.characterStorageKey());
-        localStorage.removeItem(this.connectionProfileStorageKey());
+        this.clearLegacyUserDataStorage();
         window.location.href = '/login.html';
       }
     },
@@ -456,31 +474,11 @@ createApp({
     async loadCharacters() {
       const { characters: defaultCharacters, disabledCharacterIds } = await this.loadDefaultCharacters();
       const disabledCharacterIdsSet = new Set(disabledCharacterIds);
-      const stored = readJsonStorage(localStorage, this.characterStorageKey(), null);
 
-      if (Array.isArray(stored) && stored.length) {
-        const normalizedStored = stored
-          .map((character) => createCharacterRecord(character))
-          .filter((character) => !disabledCharacterIdsSet.has(character.id));
-        const mergedCharacters = [...normalizedStored];
-
-        for (const defaultCharacter of defaultCharacters) {
-          if (!mergedCharacters.some((character) => character.id === defaultCharacter.id)) {
-            mergedCharacters.push(defaultCharacter);
-          }
-        }
-
-        this.characters = mergedCharacters;
-      } else {
-        this.characters = defaultCharacters;
-      }
-
-      this.persistCharacters({ sync: false });
+      this.characters = defaultCharacters.filter((character) => !disabledCharacterIdsSet.has(character.id));
     },
 
     persistCharacters({ sync = true } = {}) {
-      localStorage.setItem(this.characterStorageKey(), JSON.stringify(this.characters));
-
       if (sync) {
         this.scheduleCharacterSync();
       }
@@ -574,53 +572,21 @@ createApp({
 
     async loadConnectionProfiles() {
       const defaultProfiles = await this.loadDefaultConnectionProfiles();
-      const stored = readJsonStorage(localStorage, this.connectionProfileStorageKey(), null);
 
-      if (Array.isArray(stored) && stored.length) {
-        const normalizedStored = stored.map((profile) => createConnectionProfileRecord(profile));
-        const mergedProfiles = [...normalizedStored];
-
-        for (const defaultProfile of defaultProfiles) {
-          const existingProfile = mergedProfiles.find((profile) => profile.id === defaultProfile.id);
-
-          if (!existingProfile) {
-            mergedProfiles.push(defaultProfile);
-          } else if (!existingProfile.apiKey && defaultProfile.apiKey) {
-            existingProfile.apiKey = defaultProfile.apiKey;
-          }
-        }
-
-        this.connectionProfiles = mergedProfiles;
-      } else {
-        this.connectionProfiles = defaultProfiles;
-      }
-
-      this.persistConnectionProfiles();
+      this.connectionProfiles = defaultProfiles;
     },
 
     persistConnectionProfiles({ sync = true } = {}) {
-      localStorage.setItem(this.connectionProfileStorageKey(), JSON.stringify(this.connectionProfiles));
-
       if (sync) {
         this.scheduleProfileSync();
       }
     },
 
     loadConversations() {
-      const stored = readJsonStorage(localStorage, this.conversationStorageKey(), null);
-      this.conversations = Array.isArray(stored)
-        ? stored
-            .map((item) => createConversationRecord(item))
-            .filter((record) => hasMeaningfulConversationMessages(record.messages || []))
-        : [];
+      this.conversations = [];
     },
 
     persistConversations({ sync = true } = {}) {
-      const persistedConversations = this.conversations.filter((record) =>
-        hasMeaningfulConversationMessages(record.messages || []),
-      );
-      localStorage.setItem(this.conversationStorageKey(), JSON.stringify(persistedConversations));
-
       if (sync) {
         this.scheduleConversationSync();
       }
@@ -694,7 +660,6 @@ createApp({
             mergedProfiles[localIndex] = createConnectionProfileRecord({
               ...mergedProfiles[localIndex],
               ...remoteProfile,
-              apiKey: mergedProfiles[localIndex].apiKey || remoteProfile.apiKey,
             });
           } else {
             mergedProfiles.push(remoteProfile);
@@ -716,15 +681,20 @@ createApp({
       }
     },
 
-    async syncConnectionProfilesToRemote() {
+    async syncConnectionProfilesToRemote(profiles = this.connectionProfiles) {
       try {
-        await fetch('/api/connection-profiles', {
+        const response = await fetch('/api/connection-profiles', {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ profiles: this.connectionProfiles }),
+          body: JSON.stringify({ profiles }),
         });
+        const data = await response.json().catch(() => null);
+
+        if (response.ok && Array.isArray(data?.profiles)) {
+          this.connectionProfiles = data.profiles.map((profile) => createConnectionProfileRecord(profile));
+        }
       } catch (error) {
         console.warn('Failed to sync connection profiles:', error);
       }
@@ -764,17 +734,11 @@ createApp({
 
     loadSettings() {
       const defaults = {
-        apiMode: 'chat_completions',
-        apiBaseUrl: '',
-        apiKey: '',
-        model: 'grok-3',
-        systemPrompt: '',
         activeCharacterId: '',
         activeConnectionProfileId: '',
         currentConversationId: '',
       };
       const stored = readJsonStorage(localStorage, STORAGE_KEY, {});
-      const sessionStored = readJsonStorage(sessionStorage, SESSION_KEY, {});
       const merged = { ...defaults, ...stored };
 
       this.activeCharacterId = merged.activeCharacterId || '';
@@ -783,7 +747,6 @@ createApp({
       }
       this.activeConnectionProfileId = merged.activeConnectionProfileId || '';
       this.currentConversationId = merged.currentConversationId || '';
-      this.migrateLegacySettingsToProfile(stored, sessionStored);
 
       if (this.connectionProfiles.length && !this.currentConnectionProfile) {
         this.activeConnectionProfileId = this.connectionProfiles[0].id;
@@ -794,56 +757,22 @@ createApp({
         return;
       }
 
-      this.settingsDraft.apiMode = merged.apiMode;
-      this.settingsDraft.apiBaseUrl = merged.apiBaseUrl;
-      this.settingsDraft.apiKey = sessionStored.apiKey ?? stored.apiKey ?? '';
-      this.setModelControls(merged.model);
-      this.settingsDraft.systemPrompt = merged.systemPrompt;
+      this.settingsDraft.apiMode = 'chat_completions';
+      this.settingsDraft.apiBaseUrl = '';
+      this.settingsDraft.apiKey = '';
+      this.setModelControls('grok-3');
+      this.settingsDraft.systemPrompt = '';
     },
 
-    migrateLegacySettingsToProfile(stored, sessionStored) {
-      if (this.connectionProfiles.length || !stored || typeof stored !== 'object') {
-        return;
-      }
-
-      const hasLegacyConnection =
-        stored.apiBaseUrl || stored.model || stored.systemPrompt || stored.apiKey || sessionStored.apiKey;
-
-      if (!hasLegacyConnection) {
-        return;
-      }
-
-      const profile = createConnectionProfileRecord({
-        name: '默认配置',
-        apiMode: stored.apiMode,
-        apiBaseUrl: stored.apiBaseUrl,
-        apiKey: stored.apiKey || sessionStored.apiKey,
-        model: stored.model,
-        systemPrompt: stored.systemPrompt,
-      });
-
-      this.connectionProfiles = [profile];
-      this.activeConnectionProfileId = profile.id;
-      this.persistConnectionProfiles();
-    },
-
-    saveSettings({ persistApiKey = false } = {}) {
+    saveSettings() {
       const payload = {
         activeCharacterId: this.activeCharacterId,
         activeConnectionProfileId: this.activeConnectionProfileId,
         currentConversationId: this.currentConversationId,
-        apiMode: this.settingsDraft.apiMode,
-        apiBaseUrl: this.settingsDraft.apiBaseUrl,
-        model: this.selectedModel,
-        systemPrompt: this.settingsDraft.systemPrompt,
       };
 
-      if (persistApiKey) {
-        payload.apiKey = this.settingsDraft.apiKey;
-      }
-
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ apiKey: this.settingsDraft.apiKey || '' }));
+      sessionStorage.removeItem(SESSION_KEY);
     },
 
     setModelControls(model) {
@@ -875,7 +804,7 @@ createApp({
       this.settingsDraft.name = profile?.name || '';
       this.settingsDraft.apiMode = profile?.apiMode || 'chat_completions';
       this.settingsDraft.apiBaseUrl = profile?.apiBaseUrl || '';
-      this.settingsDraft.apiKey = profile?.apiKey || '';
+      this.settingsDraft.apiKey = '';
       this.setModelControls(profile?.model || 'grok-3');
       this.settingsDraft.systemPrompt = profile?.systemPrompt || '';
     },
@@ -896,13 +825,14 @@ createApp({
 
     selectConnectionProfile() {
       this.applyConnectionProfile(this.currentConnectionProfile);
-      this.saveSettings({ persistApiKey: true });
+      this.saveSettings();
     },
 
-    saveCurrentConnectionProfile() {
+    async saveCurrentConnectionProfile() {
       const values = this.getCurrentSettingsValues();
       const name = values.name || values.apiBaseUrl || values.model || '未命名配置';
       const now = new Date().toISOString();
+      let savedProfileId = this.activeConnectionProfileId;
 
       if (this.activeConnectionProfileId) {
         this.connectionProfiles = this.connectionProfiles.map((profile) =>
@@ -913,11 +843,14 @@ createApp({
       } else {
         const profile = createConnectionProfileRecord({ ...values, name, updatedAt: now });
         this.activeConnectionProfileId = profile.id;
+        savedProfileId = profile.id;
         this.connectionProfiles.push(profile);
       }
 
-      this.persistConnectionProfiles();
-      this.saveSettings({ persistApiKey: true });
+      await this.syncConnectionProfilesToRemote(this.connectionProfiles);
+      this.activeConnectionProfileId = savedProfileId;
+      this.applyConnectionProfile(this.currentConnectionProfile);
+      this.saveSettings();
       this.showButtonFeedback('save', '已保存');
     },
 
@@ -933,6 +866,8 @@ createApp({
         ...profile,
         id: createId('connection-profile'),
         name: `${profile.name || '未命名配置'} copy`,
+        apiKey: '',
+        hasApiKey: false,
         createdAt: now,
         updatedAt: now,
       });
@@ -941,11 +876,11 @@ createApp({
       this.activeConnectionProfileId = copiedProfile.id;
       this.persistConnectionProfiles();
       this.applyConnectionProfile(copiedProfile);
-      this.saveSettings({ persistApiKey: true });
+      this.saveSettings();
       this.showButtonFeedback('copy', '已复制');
     },
 
-    deleteCurrentConnectionProfile() {
+    async deleteCurrentConnectionProfile() {
       const profile = this.currentConnectionProfile;
 
       if (!profile) {
@@ -960,7 +895,7 @@ createApp({
 
       this.connectionProfiles = this.connectionProfiles.filter((item) => item.id !== profile.id);
       this.activeConnectionProfileId = this.connectionProfiles[0]?.id || '';
-      this.persistConnectionProfiles();
+      await this.syncConnectionProfilesToRemote();
 
       if (this.activeConnectionProfileId) {
         this.applyConnectionProfile(this.currentConnectionProfile);
@@ -968,7 +903,7 @@ createApp({
         this.resetConnectionProfileEditor();
       }
 
-      this.saveSettings({ persistApiKey: true });
+      this.saveSettings();
     },
 
     showButtonFeedback(key, message) {
@@ -1243,13 +1178,18 @@ createApp({
     },
 
     validateChatConfig() {
-      if (!String(this.settingsDraft.apiBaseUrl || '').trim()) {
-        this.showConfigError('请先在设置中填写 API Base URL。');
+      if (!this.currentConnectionProfile) {
+        this.showConfigError('请先保存并选择一个连接配置。');
         return false;
       }
 
-      if (!String(this.settingsDraft.apiKey || '').trim()) {
-        this.showConfigError('请先在设置中填写 API Key。');
+      if (!String(this.currentConnectionProfile.apiBaseUrl || '').trim()) {
+        this.showConfigError('当前连接配置缺少 API Base URL，请补全后保存。');
+        return false;
+      }
+
+      if (!this.currentConnectionProfile.hasApiKey) {
+        this.showConfigError('当前连接配置缺少已保存的 API Key，请填写并保存。');
         return false;
       }
 
@@ -1424,10 +1364,7 @@ createApp({
       this.scrollChatToBottom();
 
       const payload = {
-        apiMode: this.settingsDraft.apiMode,
-        apiBaseUrl: this.settingsDraft.apiBaseUrl,
-        apiKey: this.settingsDraft.apiKey,
-        model: this.selectedModel,
+        profileId: this.activeConnectionProfileId,
         stream: true,
         systemPrompt: this.buildEffectiveSystemPrompt(),
         userMessage: messageText,

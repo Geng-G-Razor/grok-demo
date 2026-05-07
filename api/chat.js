@@ -1,4 +1,5 @@
 import { createChatStreamResponse, handleChatPayload, serializeError } from '../lib/chat-api.mjs';
+import { getAuthenticatedAccess, isAccessAuthEnabled } from '../lib/access-auth.mjs';
 
 export default {
   async fetch(request) {
@@ -7,13 +8,21 @@ export default {
     }
 
     try {
-      const body = await request.json();
+      const access = await getAuthenticatedAccess(request.headers.get('cookie'));
 
-      if (body.stream !== false) {
-        return createChatStreamResponse(body);
+      if ((await isAccessAuthEnabled()) && !access) {
+        return Response.json({ ok: false, error: '需要先输入访问密码' }, { status: 401 });
       }
 
-      const result = await handleChatPayload(body);
+      const accountId = access?.id || 'public';
+      const body = await request.json();
+      const options = { accountId };
+
+      if (body.stream !== false) {
+        return createChatStreamResponse(body, options);
+      }
+
+      const result = await handleChatPayload(body, options);
 
       return Response.json(result.payload, { status: result.statusCode });
     } catch (error) {
