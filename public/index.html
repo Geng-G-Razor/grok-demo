@@ -3,293 +3,218 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Reasoning Chat Demo</title>
+    <title>razor-chat</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main class="page">
+    <main id="app" class="page" v-cloak>
       <section class="chat-shell card">
         <header class="chat-header">
           <div class="toolbar-left">
-            <span id="status-pill" class="status-pill idle">未发送</span>
-            <span id="active-character-chip" class="toolbar-chip">无角色</span>
+            <span class="status-pill" :class="status.type">{{ status.text }}</span>
+            <span class="toolbar-chip" :class="{ 'has-character': activeCharacter }">
+              {{ activeCharacter ? activeCharacter.name : '无角色' }}
+            </span>
           </div>
           <div class="toolbar-actions">
-            <button
-              id="new-chat-button"
-              class="ghost-button toolbar-icon-button"
-              type="button"
-              aria-label="新对话"
-              title="新对话"
-            >
+            <button class="ghost-button toolbar-icon-button" type="button" aria-label="新对话" title="新对话" @click="startNewConversation">
               <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path
-                  d="M10 3.2a.8.8 0 0 1 .8.8v5.2H16a.8.8 0 1 1 0 1.6h-5.2V16a.8.8 0 1 1-1.6 0v-5.2H4a.8.8 0 1 1 0-1.6h5.2V4a.8.8 0 0 1 .8-.8Z"
-                />
+                <path d="M10 3.2a.8.8 0 0 1 .8.8v5.2H16a.8.8 0 1 1 0 1.6h-5.2V16a.8.8 0 1 1-1.6 0v-5.2H4a.8.8 0 1 1 0-1.6h5.2V4a.8.8 0 0 1 .8-.8Z" />
               </svg>
             </button>
-            <button
-              id="clear-chat-button"
-              class="ghost-button toolbar-icon-button"
-              type="button"
-              aria-label="清空对话"
-              title="清空"
-            >
+            <button class="ghost-button toolbar-icon-button" type="button" aria-label="清空对话" title="清空" @click="clearConversation">
               <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path
-                  d="M7 3.8h6a1.7 1.7 0 0 1 1.7 1.7v.7H16a.8.8 0 1 1 0 1.6h-.6l-.7 7.4A2 2 0 0 1 12.7 17H7.3a2 2 0 0 1-2-1.8l-.7-7.4H4a.8.8 0 1 1 0-1.6h1.3v-.7A1.7 1.7 0 0 1 7 3.8Zm0 2.4h6v-.7a.1.1 0 0 0-.1-.1H7a.1.1 0 0 0-.1.1v.7Zm-.1 1.6.6 7.2a.4.4 0 0 0 .4.4h5.4a.4.4 0 0 0 .4-.4l.6-7.2H6.9Zm2 1.4a.8.8 0 0 1 .8.8v3.2a.8.8 0 1 1-1.6 0V10a.8.8 0 0 1 .8-.8Zm2.2 0a.8.8 0 0 1 .8.8v3.2a.8.8 0 1 1-1.6 0V10a.8.8 0 0 1 .8-.8Z"
-                />
+                <path d="M7 3.8h6a1.7 1.7 0 0 1 1.7 1.7v.7H16a.8.8 0 1 1 0 1.6h-.6l-.7 7.4A2 2 0 0 1 12.7 17H7.3a2 2 0 0 1-2-1.8l-.7-7.4H4a.8.8 0 1 1 0-1.6h1.3v-.7A1.7 1.7 0 0 1 7 3.8Zm0 2.4h6v-.7a.1.1 0 0 0-.1-.1H7a.1.1 0 0 0-.1.1v.7Zm-.1 1.6.6 7.2a.4.4 0 0 0 .4.4h5.4a.4.4 0 0 0 .4-.4l.6-7.2H6.9Zm2 1.4a.8.8 0 0 1 .8.8v3.2a.8.8 0 1 1-1.6 0V10a.8.8 0 0 1 .8-.8Zm2.2 0a.8.8 0 0 1 .8.8v3.2a.8.8 0 1 1-1.6 0V10a.8.8 0 0 1 .8-.8Z" />
               </svg>
             </button>
-            <button
-              id="toggle-history-button"
-              class="ghost-button toolbar-icon-button"
-              type="button"
-              aria-label="切换记录面板"
-              aria-controls="history-panel"
-              aria-pressed="false"
-              title="记录"
-            >
+            <button class="ghost-button toolbar-icon-button" type="button" aria-label="切换记录面板" title="记录" :aria-pressed="activePanel === 'history'" @click="togglePanel('history')">
               <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path
-                  d="M4.5 3.5h8.8c1.2 0 2.2 1 2.2 2.2v9.8c0 .5-.5.8-.9.6l-2.2-1.4-2.2 1.4a.7.7 0 0 1-.8 0l-2.2-1.4-2.2 1.4c-.5.3-.9 0-.9-.6V5.7c0-1.2 1-2.2 2.2-2.2Zm1.4 3.3a.7.7 0 1 0 0 1.4h6.2a.7.7 0 1 0 0-1.4H5.9Zm0 3a.7.7 0 1 0 0 1.4h6.2a.7.7 0 1 0 0-1.4H5.9Z"
-                />
+                <path d="M4.5 3.5h8.8c1.2 0 2.2 1 2.2 2.2v9.8c0 .5-.5.8-.9.6l-2.2-1.4-2.2 1.4a.7.7 0 0 1-.8 0l-2.2-1.4-2.2 1.4c-.5.3-.9 0-.9-.6V5.7c0-1.2 1-2.2 2.2-2.2Zm1.4 3.3a.7.7 0 1 0 0 1.4h6.2a.7.7 0 1 0 0-1.4H5.9Zm0 3a.7.7 0 1 0 0 1.4h6.2a.7.7 0 1 0 0-1.4H5.9Z" />
               </svg>
             </button>
-            <button
-              id="toggle-character-button"
-              class="ghost-button toolbar-icon-button"
-              type="button"
-              aria-label="切换角色面板"
-              aria-controls="character-panel"
-              aria-pressed="false"
-              title="角色"
-            >
+            <button class="ghost-button toolbar-icon-button" type="button" aria-label="切换角色面板" title="角色" :aria-pressed="activePanel === 'character'" @click="togglePanel('character')">
               <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path
-                  d="M10 10.2a3.6 3.6 0 1 0 0-7.2 3.6 3.6 0 0 0 0 7.2Zm0 1.8c-3.5 0-6.4 1.9-7.2 4.7-.1.5.2 1 .7 1h13c.5 0 .9-.5.7-1-.8-2.8-3.7-4.7-7.2-4.7Z"
-                />
+                <path d="M10 10.2a3.6 3.6 0 1 0 0-7.2 3.6 3.6 0 0 0 0 7.2Zm0 1.8c-3.5 0-6.4 1.9-7.2 4.7-.1.5.2 1 .7 1h13c.5 0 .9-.5.7-1-.8-2.8-3.7-4.7-7.2-4.7Z" />
               </svg>
             </button>
-            <button
-              id="toggle-settings-button"
-              class="ghost-button toolbar-icon-button"
-              type="button"
-              aria-label="切换设置面板"
-              aria-controls="settings-panel"
-              aria-pressed="false"
-              title="设置"
-            >
+            <button class="ghost-button toolbar-icon-button" type="button" aria-label="切换设置面板" title="设置" :aria-pressed="activePanel === 'settings'" @click="togglePanel('settings')">
               <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path
-                  d="M4 5.1a2.1 2.1 0 1 1 4.2 0A2.1 2.1 0 0 1 4 5.1Zm6 0c0-.4.3-.7.7-.7h5.3a.7.7 0 1 1 0 1.4h-5.3a.7.7 0 0 1-.7-.7ZM11.8 14.9a2.1 2.1 0 1 1 4.2 0 2.1 2.1 0 0 1-4.2 0Zm-8.5 0c0-.4.3-.7.7-.7h5.3a.7.7 0 1 1 0 1.4H4a.7.7 0 0 1-.7-.7ZM8.8 10a2.1 2.1 0 1 1 4.2 0 2.1 2.1 0 0 1-4.2 0Zm-5.5 0c0-.4.3-.7.7-.7h2.8a.7.7 0 1 1 0 1.4H4a.7.7 0 0 1-.7-.7Zm10 0c0-.4.3-.7.7-.7H16a.7.7 0 1 1 0 1.4H14a.7.7 0 0 1-.7-.7Z"
-                />
+                <path d="M4 5.1a2.1 2.1 0 1 1 4.2 0A2.1 2.1 0 0 1 4 5.1Zm6 0c0-.4.3-.7.7-.7h5.3a.7.7 0 1 1 0 1.4h-5.3a.7.7 0 0 1-.7-.7ZM11.8 14.9a2.1 2.1 0 1 1 4.2 0 2.1 2.1 0 0 1-4.2 0Zm-8.5 0c0-.4.3-.7.7-.7h5.3a.7.7 0 1 1 0 1.4H4a.7.7 0 0 1-.7-.7ZM8.8 10a2.1 2.1 0 1 1 4.2 0 2.1 2.1 0 0 1-4.2 0Zm-5.5 0c0-.4.3-.7.7-.7h2.8a.7.7 0 1 1 0 1.4H4a.7.7 0 0 1-.7-.7Zm10 0c0-.4.3-.7.7-.7H16a.7.7 0 1 1 0 1.4H14a.7.7 0 0 1-.7-.7Z" />
               </svg>
             </button>
-            <button
-              id="toggle-debug-button"
-              class="ghost-button toolbar-icon-button"
-              type="button"
-              aria-label="切换调试面板"
-              aria-controls="debug-panel"
-              aria-pressed="false"
-              title="调试"
-            >
+            <button class="ghost-button toolbar-icon-button" type="button" aria-label="切换调试面板" title="调试" :aria-pressed="activePanel === 'debug'" @click="togglePanel('debug')">
               <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path
-                  d="M6.4 5.2a.8.8 0 0 1 0 1.1L3.7 9l2.7 2.7a.8.8 0 0 1-1.1 1.1l-3.3-3.3a.8.8 0 0 1 0-1.1l3.3-3.3a.8.8 0 0 1 1.1 0Zm7.2 0a.8.8 0 0 1 1.1 0l3.3 3.3a.8.8 0 0 1 0 1.1l-3.3 3.3a.8.8 0 1 1-1.1-1.1L16.3 9l-2.7-2.7a.8.8 0 0 1 0-1.1ZM10.9 4.5a.8.8 0 0 1 .6 1l-2 8a.8.8 0 1 1-1.6-.4l2-8a.8.8 0 0 1 1-.6Z"
-                />
+                <path d="M6.4 5.2a.8.8 0 0 1 0 1.1L3.7 9l2.7 2.7a.8.8 0 0 1-1.1 1.1l-3.3-3.3a.8.8 0 0 1 0-1.1l3.3-3.3a.8.8 0 0 1 1.1 0Zm7.2 0a.8.8 0 0 1 1.1 0l3.3 3.3a.8.8 0 0 1 0 1.1l-3.3 3.3a.8.8 0 1 1-1.1-1.1L16.3 9l-2.7-2.7a.8.8 0 0 1 0-1.1ZM10.9 4.5a.8.8 0 0 1 .6 1l-2 8a.8.8 0 1 1-1.6-.4l2-8a.8.8 0 0 1 1-.6Z" />
               </svg>
             </button>
           </div>
         </header>
 
-        <div id="panel-overlay" class="panel-overlay" hidden></div>
+        <div class="panel-overlay" v-show="activePanel" @click="closeAllPanels"></div>
 
-        <div id="chat-feed" class="chat-feed" aria-live="polite">
-          <section class="empty-state">
+        <div ref="chatFeed" class="chat-feed" aria-live="polite">
+          <section v-if="!conversation.length" class="empty-state">
             <p class="muted">开始聊天</p>
           </section>
+
+          <article v-for="(message, index) in conversation" :key="`${index}-${message.role}`" class="message" :class="`message-${message.role}`">
+            <div v-if="message.pending || message.error" class="message-badges">
+              <span v-if="message.pending" class="message-badge">响应中</span>
+              <span v-if="message.error" class="message-badge error">失败</span>
+            </div>
+            <details v-if="message.reasoning && message.role === 'assistant'" class="reasoning-toggle" :open="message.pending || index === latestAssistantReasoningIndex">
+              <summary>查看思考内容</summary>
+              <div class="reasoning-copy" v-html="renderParagraphs(message.reasoning)"></div>
+            </details>
+            <div class="message-body" v-html="renderParagraphs(message.content || (message.pending ? '正在等待响应...' : '空响应'))"></div>
+            <div v-if="index === lastUserMessageIndex" class="message-actions">
+              <button class="message-retry-button" type="button" :disabled="isRequestInFlight || message.pending" @click="retryLastResponse">重新回答</button>
+            </div>
+          </article>
         </div>
 
-        <form id="chat-form" class="composer">
+        <form class="composer" @submit.prevent="submitMessage">
           <div class="composer-box">
-            <textarea
-              id="userMessage"
-              name="userMessage"
-              rows="3"
-              placeholder="输入消息"
-              required
-            ></textarea>
-            <button id="submit-button" type="submit">发送</button>
+            <textarea v-model="userMessage" rows="3" placeholder="输入消息" required @keydown.enter.exact.prevent="submitMessage"></textarea>
+            <button type="submit" :disabled="isRequestInFlight">{{ isRequestInFlight ? '发送中...' : '发送' }}</button>
           </div>
 
-          <section id="history-panel" class="panel-modal" hidden aria-labelledby="history-panel-title">
+          <section v-show="activePanel === 'history'" class="panel-modal" aria-labelledby="history-panel-title">
             <div class="panel-modal-header">
               <h2 id="history-panel-title" class="panel-modal-title">对话记录</h2>
-              <button
-                class="ghost-button panel-close-button"
-                type="button"
-                data-close-panel="history-panel"
-                aria-label="关闭对话记录"
-              >
-                关闭
-              </button>
+              <button class="ghost-button panel-close-button" type="button" aria-label="关闭对话记录" @click="closeAllPanels">关闭</button>
             </div>
             <div class="panel-modal-body history-stack">
-              <div id="conversation-list" class="history-list"></div>
+              <div class="history-list">
+                <p v-if="!visibleConversations.length" class="history-empty">暂无对话记录</p>
+                <button v-for="record in sortedConversations" :key="record.id" type="button" class="history-item" :class="{ active: record.id === currentConversationId }" @click="selectConversation(record)">
+                  <span class="history-title">{{ record.title || '新对话' }}</span>
+                  <span class="history-meta">{{ formatConversationTime(record.updatedAt) }} · {{ record.messages.length }} 条消息</span>
+                  <span class="history-preview">{{ getConversationPreview(record) }}</span>
+                </button>
+              </div>
             </div>
           </section>
 
-          <section
-            id="character-panel"
-            class="panel-modal"
-            hidden
-            aria-labelledby="character-panel-title"
-          >
+          <section v-show="activePanel === 'character'" class="panel-modal" aria-labelledby="character-panel-title">
             <div class="panel-modal-header">
               <h2 id="character-panel-title" class="panel-modal-title">角色</h2>
-              <button
-                class="ghost-button panel-close-button"
-                type="button"
-                data-close-panel="character-panel"
-                aria-label="关闭角色面板"
-              >
-                关闭
-              </button>
+              <button class="ghost-button panel-close-button" type="button" aria-label="关闭角色面板" @click="closeAllPanels">关闭</button>
             </div>
             <div class="panel-modal-body character-stack">
               <label>
                 <span>当前角色</span>
-                <select id="characterSelect" name="characterSelect">
+                <select v-model="activeCharacterId" @change="syncCharacterEditorAndSave">
                   <option value="">无角色</option>
+                  <option v-for="character in characters" :key="character.id" :value="character.id">{{ character.name }}</option>
                 </select>
               </label>
 
               <div class="character-actions">
-                <button id="new-character-button" class="ghost-button" type="button">新建</button>
-                <button id="save-character-button" class="ghost-button" type="button">保存</button>
-                <button
-                  id="delete-character-button"
-                  class="ghost-button danger-button"
-                  type="button"
-                >
-                  删除
-                </button>
+                <button class="ghost-button" type="button" @click="resetCharacterEditor">新建</button>
+                <button class="ghost-button" type="button" :disabled="!activeCharacter" @click="copyCurrentCharacter">{{ buttonFeedback.characterCopy || '复制' }}</button>
+                <button class="ghost-button" type="button" @click="createOrUpdateCharacter">保存</button>
+                <button class="ghost-button danger-button" type="button" :disabled="!activeCharacter" @click="deleteCurrentCharacter">删除</button>
               </div>
 
               <label>
                 <span>角色名</span>
-                <input
-                  id="characterName"
-                  name="characterName"
-                  type="text"
-                  placeholder="例如：温柔姐姐 / 冷静分析师"
-                />
+                <input v-model="characterDraft.name" type="text" placeholder="例如：温柔姐姐 / 冷静分析师" />
               </label>
 
               <label>
-                <span>角色设定</span>
-                <textarea
-                  id="characterPrompt"
-                  name="characterPrompt"
-                  rows="5"
-                  placeholder="例如：你是一个温柔、克制、会照顾人的中文角色，说话自然，不要跳出角色。"
-                ></textarea>
+                <span class="field-label-row">
+                  <span>角色设定</span>
+                  <span class="field-meta">{{ characterPromptDraftLength }} 字</span>
+                </span>
+                <textarea id="characterPrompt" v-model="characterDraft.prompt" rows="5" placeholder="例如：你是一个温柔、克制、会照顾人的中文角色，说话自然，不要跳出角色。"></textarea>
               </label>
             </div>
           </section>
 
-          <section id="settings-panel" class="panel-modal" hidden aria-labelledby="settings-panel-title">
+          <section v-show="activePanel === 'settings'" class="panel-modal" aria-labelledby="settings-panel-title">
             <div class="panel-modal-header">
               <h2 id="settings-panel-title" class="panel-modal-title">连接设置与高级参数</h2>
-              <button
-                class="ghost-button panel-close-button"
-                type="button"
-                data-close-panel="settings-panel"
-                aria-label="关闭设置面板"
-              >
-                关闭
-              </button>
+              <button class="ghost-button panel-close-button" type="button" aria-label="关闭设置面板" @click="closeAllPanels">关闭</button>
             </div>
             <div class="panel-modal-body form-grid">
               <label>
+                <span>配置</span>
+                <select v-model="activeConnectionProfileId" @change="selectConnectionProfile">
+                  <option value="">未保存配置</option>
+                  <option v-for="profile in connectionProfiles" :key="profile.id" :value="profile.id">{{ profile.name || '未命名配置' }}</option>
+                </select>
+              </label>
+
+              <label>
+                <span>配置名称</span>
+                <input v-model="settingsDraft.name" type="text" placeholder="例如：OpenRouter 免费模型" @input="saveSettings" />
+              </label>
+
+              <div class="settings-actions span-2">
+                <button class="ghost-button" type="button" @click="resetConnectionProfileEditor">新增</button>
+                <button class="ghost-button" type="button" :disabled="!currentConnectionProfile" @click="copyCurrentConnectionProfile">{{ buttonFeedback.copy || '复制' }}</button>
+                <button type="button" @click="saveCurrentConnectionProfile">{{ buttonFeedback.save || '保存' }}</button>
+                <button class="ghost-button danger-button" type="button" :disabled="!currentConnectionProfile" @click="deleteCurrentConnectionProfile">删除</button>
+              </div>
+
+              <label>
                 <span>API Mode</span>
-                <select id="apiMode" name="apiMode">
-                  <option value="chat_completions" selected>Chat Completions</option>
+                <select v-model="settingsDraft.apiMode" @change="saveSettings">
+                  <option value="chat_completions">Chat Completions</option>
                   <option value="responses">Responses API</option>
                 </select>
               </label>
 
               <label class="span-2">
                 <span>API Base URL</span>
-                <input
-                  id="apiBaseUrl"
-                  name="apiBaseUrl"
-                  type="text"
-                  placeholder="例如：https://api.example.com"
-                  required
-                />
+                <input v-model="settingsDraft.apiBaseUrl" type="text" placeholder="例如：https://api.example.com" required @input="saveSettings" />
               </label>
 
               <label class="span-2">
                 <span>API Key</span>
-                <input
-                  id="apiKey"
-                  name="apiKey"
-                  type="password"
-                  placeholder="填你的 API Key"
-                  required
-                />
+                <input v-model="settingsDraft.apiKey" type="password" placeholder="填你的 API Key" required />
               </label>
 
               <label>
                 <span>Model</span>
-                <select id="model" name="model" required>
-                  <option value="grok-3">grok-3</option>
-                  <option value="grok-4.1">grok-4.1</option>
-                  <option value="grok-4">grok-4</option>
+                <select v-model="settingsDraft.modelSelect" required @change="saveSettings">
+                  <option v-for="model in availableModels" :key="model" :value="model">{{ model }}</option>
                 </select>
               </label>
 
               <label>
+                <span>自定义 Model</span>
+                <input v-model="settingsDraft.modelCustom" type="text" placeholder="填写后优先使用" @input="saveSettings" />
+              </label>
+
+              <label class="span-2">
                 <span>System Prompt</span>
-                <textarea
-                  id="systemPrompt"
-                  name="systemPrompt"
-                  rows="3"
-                  placeholder="可选，例如：你是一个简洁的中文助手。"
-                ></textarea>
+                <textarea v-model="settingsDraft.systemPrompt" rows="3" placeholder="可选，例如：你是一个简洁的中文助手。" @input="saveSettings"></textarea>
               </label>
             </div>
           </section>
 
-          <section id="debug-panel" class="panel-modal" hidden aria-labelledby="debug-panel-title">
+          <section v-show="activePanel === 'debug'" class="panel-modal" aria-labelledby="debug-panel-title">
             <div class="panel-modal-header">
               <h2 id="debug-panel-title" class="panel-modal-title">调试信息与原始响应</h2>
-              <button
-                class="ghost-button panel-close-button"
-                type="button"
-                data-close-panel="debug-panel"
-                aria-label="关闭调试面板"
-              >
-                关闭
-              </button>
+              <div class="panel-header-actions">
+                <button class="ghost-button panel-close-button" type="button" aria-label="退出登录" @click="logout">退出登录</button>
+                <button class="ghost-button panel-close-button" type="button" aria-label="关闭调试面板" @click="closeAllPanels">关闭</button>
+              </div>
             </div>
             <div class="panel-modal-body debug-stack">
               <section>
                 <h3>调试信息</h3>
-                <pre id="meta" class="result empty">暂无结果</pre>
+                <pre class="result" :class="{ empty: !debug.meta }">{{ debug.meta || '暂无结果' }}</pre>
               </section>
-
               <section>
                 <h3>思考内容</h3>
-                <pre id="reasoning" class="result empty">暂无结果</pre>
+                <pre class="result" :class="{ empty: !debug.reasoning }">{{ debug.reasoning || '暂无结果' }}</pre>
               </section>
-
               <section>
                 <h3>原始响应 JSON</h3>
-                <pre id="raw" class="result empty">暂无结果</pre>
+                <pre class="result" :class="{ empty: !debug.raw }">{{ debug.raw || '暂无结果' }}</pre>
               </section>
             </div>
           </section>
@@ -297,6 +222,8 @@
       </section>
     </main>
 
-    <script src="/app.js" type="module"></script>
+    <script src="/vendor/markdown-it.min.js"></script>
+    <script src="/vendor/vue.global.prod.js"></script>
+    <script src="/app.js"></script>
   </body>
 </html>

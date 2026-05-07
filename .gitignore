@@ -1,2 +1,5 @@
 .idea/
 .vercel
+node_modules/
+.data/
+.remote-db/

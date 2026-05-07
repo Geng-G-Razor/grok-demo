@@ -1,4 +1,4 @@
-import { handleChatPayload, serializeError } from '../lib/chat-api.mjs';
+import { createChatStreamResponse, handleChatPayload, serializeError } from '../lib/chat-api.mjs';
 
 export default {
   async fetch(request) {
@@ -8,6 +8,11 @@ export default {
 
     try {
       const body = await request.json();
+
+      if (body.stream !== false) {
+        return createChatStreamResponse(body);
+      }
+
       const result = await handleChatPayload(body);
 
       return Response.json(result.payload, { status: result.statusCode });

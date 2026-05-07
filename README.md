@@ -1,4 +1,4 @@
-# Grok Chat Demo
+# razor-chat
 
 一个可本地运行、也可直接部署到 Vercel 的聊天 demo。
 
@@ -30,7 +30,11 @@ HOST=127.0.0.1 pnpm dev
 ## 项目结构
 
 - `public/`
-  前端静态页面
+  Vue 3 前端静态页面
+- `public/vendor/vue.global.prod.js`
+  本地 vendored Vue runtime
+- `public/default-connection-profiles.json`
+  项目自带连接配置数据
 - `api/chat.js`
   Vercel Serverless Function
 - `lib/chat-api.mjs`
@@ -40,12 +44,28 @@ HOST=127.0.0.1 pnpm dev
 
 ## 特点
 
-- 不依赖第三方 npm 包
+- 使用 Vue 3 管理聊天、角色、连接配置和调试面板状态
 - 前端填写 `API Base URL`、`API Key`、`Model`
+- 首次打开时会加载项目自带连接配置；已有浏览器本地配置时会合并新增项
 - 支持两种模式：
   - `/v1/chat/completions`
   - `/v1/responses`
-- 支持角色、本地配置记忆、调试面板
+- 支持角色、多连接配置、本地配置记忆、调试面板
+
+### 默认角色与调试角色
+
+`public/default-characters.json` 分为 `default` 和 `debug` 两组：
+
+- `default`：默认角色，始终合并到用户本地角色列表。
+- `debug`：调试角色，只在 `debugEnabled` 为 `true` 时合并；设为 `false` 后，同 ID 的内置调试角色会从本地列表隐藏。
+
+发版前按需修改：
+
+```json
+{
+  "debugEnabled": false
+}
+```
 
 ## Vercel 部署
 
@@ -64,9 +84,97 @@ Vercel 官方当前文档说明：
 1. 把整个 `grok-demo` 目录导入 Vercel
 2. Build Command 留空
 3. Output Directory 留默认
-4. 直接部署
+4. 如果需要访问密码，在 Vercel Project Settings 的 Environment Variables 里添加 `APP_PASSWORD`
+5. 直接部署
+
+### 访问密码
+
+设置 `APP_PASSWORD` 后，站点会先显示访问验证页；验证成功后浏览器会收到一个 HttpOnly Cookie，后续页面与 `/api/chat` 请求才会放行。
+
+本地调试：
+
+```zsh
+APP_PASSWORD=your-password pnpm dev
+```
+
+多套访问密码可以使用 `APP_PASSWORDS_JSON`。每个 `id` 会对应独立的聊天记录存储：
+
+```zsh
+APP_PASSWORD='main-password' \
+APP_PASSWORDS_JSON='[{"id":"guest","password":"guest-password"}]' \
+pnpm dev
+```
+
+其中 `APP_PASSWORD` 对应默认身份 `default`，会写入 SQLite 中的 `default` scope；`guest` 会写入 SQLite 中的 `guest` scope。如果使用 Upstash Redis，则会使用不同的 Redis key 后缀隔离。
+
+Vercel CLI 设置：
+
+```zsh
+vercel env add APP_PASSWORD preview --sensitive
+vercel env add APP_PASSWORD production --sensitive
+```
+
+如果未设置 `APP_PASSWORD`，站点保持无密码访问，方便本地快速调试。
+
+### 聊天记录同步
+
+聊天记录、角色列表和连接配置会同步到服务端。VPS 部署时，如果没有配置 Upstash Redis，会自动写入 `.data/razor-chat.db`：
+
+```text
+.data/razor-chat.db
+```
+
+多套访问密码会按身份 ID 隔离，例如 `admin` 身份会写入 SQLite 中的 `admin` scope。
+
+旧版 `.data/conversations*.json`、`.data/characters*.json`、`.data/profiles.json` 在首次访问时会自动迁移到 SQLite，迁移后本地存储统一走数据库。
+
+如果配置了 Upstash Redis，会优先同步到 Redis。线上启用同步需要在 Vercel 项目里配置：
+
+```text
+UPSTASH_REDIS_REST_URL
+UPSTASH_REDIS_REST_TOKEN
+```
+
+如果通过 Vercel Marketplace 安装 Upstash for Redis，也兼容它注入的变量：
+
+```text
+KV_REST_API_URL
+KV_REST_API_TOKEN
+```
+
+可选自定义存储 key：
+
+```text
+CONVERSATIONS_STORE_KEY=grok-demo:conversations:v1
+```
+
+本地开发如果没有配置 Upstash，会自动写入 `.data/razor-chat.db`，该目录不会提交到 Git。
+
+### 下载 VPS 数据库
+
+如果想把 VPS 上的 SQLite 快照下载到本机，用：
+
+```zsh
+scripts/vps-db.zsh pull
+```
+
+默认会从 `my-vps-2:/home/ubuntu/apps/grok-demo/.data/razor-chat.db` 生成一致性备份，并下载到本地 `.remote-db/` 目录。
+
+如果希望下载后直接在 Finder 里定位文件：
+
+```zsh
+OPEN_AFTER_PULL=1 scripts/vps-db.zsh pull
+```
+
+首次使用如果 VPS 上还没有 `sqlite3`，先安装：
+
+```zsh
+ssh my-vps-2 "sudo apt-get update && sudo apt-get install -y sqlite3"
+```
 
 ## 注意
 
 - 这是一个 BYOK 页面，用户会在前端输入自己的 API Key
-- 如果要公开给别人用，建议加密码保护或访问控制
+- 访问密码能阻止未授权访客打开页面或调用 `/api/chat`
+- 如果部署在 Vercel 且未配置 Upstash Redis，聊天记录、角色和连接配置同步接口会提示存储未配置
+- 如果把自己的 API Key 写进前端代码、静态 JSON 或浏览器存储，仍然会暴露；真正隐藏 Key 需要改为服务端环境变量读取
