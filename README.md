@@ -147,7 +147,7 @@ vercel env add APP_PASSWORD production --sensitive
 
 浏览器的 `localStorage` 只保留当前角色、当前连接配置、当前对话等界面状态，不再保存 API Key、对话正文、角色设定或连接配置明细。连接配置接口返回时会隐藏 API Key；聊天请求只传连接配置 ID，由服务端读取数据库里的 API Key 后调用模型接口。
 
-旧版 `.data/conversations*.json`、`.data/characters*.json`、`.data/profiles.json` 在首次访问时会自动迁移到 SQLite，迁移后本地存储统一走数据库。
+旧版 `.data/conversations*.json`、`.data/characters*.json`、`.data/profiles.json` 已不再参与迁移，数据库是唯一的服务端主存储。
 
 如果配置了 Upstash Redis，会优先同步到 Redis。线上启用同步需要在 Vercel 项目里配置：
 

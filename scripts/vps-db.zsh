@@ -11,6 +11,7 @@ KEEP_REMOTE_BACKUP=${KEEP_REMOTE_BACKUP:-0}
 OPEN_AFTER_PULL=${OPEN_AFTER_PULL:-0}
 KEEP_REMOTE_REPLACEMENT_BACKUP=${KEEP_REMOTE_REPLACEMENT_BACKUP:-1}
 VERIFY_LOCAL_DB=${VERIFY_LOCAL_DB:-1}
+LOCAL_UPLOAD_SOURCE=""
 
 TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 REMOTE_DB_PATH="${REMOTE_DB_DIR}/${REMOTE_DB_NAME}"
@@ -125,11 +126,32 @@ if [[ "${VERIFY_LOCAL_DB}" == "1" ]]; then
   fi
 fi
 
+if command -v sqlite3 >/dev/null 2>&1; then
+  LOCAL_UPLOAD_SOURCE=$(mktemp "${TMPDIR:-/tmp}/razor-chat-upload-${TIMESTAMP}.XXXXXX.db")
+  sqlite3 "${LOCAL_DB_PATH}" ".backup '${LOCAL_UPLOAD_SOURCE}'"
+  snapshot_integrity_result=$(sqlite3 "${LOCAL_UPLOAD_SOURCE}" "PRAGMA integrity_check;")
+
+  if [[ "${snapshot_integrity_result}" != "ok" ]]; then
+    echo "Local database snapshot integrity check failed:" >&2
+    echo "${snapshot_integrity_result}" >&2
+    rm -f "${LOCAL_UPLOAD_SOURCE}"
+    exit 1
+  fi
+else
+  LOCAL_UPLOAD_SOURCE="${LOCAL_DB_PATH}"
+fi
+
 echo "Uploading SQLite database to ${SSH_TARGET}"
 echo "  local db:  ${LOCAL_DB_PATH}"
+if [[ "${LOCAL_UPLOAD_SOURCE}" != "${LOCAL_DB_PATH}" ]]; then
+  echo "  snapshot:  ${LOCAL_UPLOAD_SOURCE}"
+fi
 echo "  remote db: ${REMOTE_DB_PATH}"
 
-scp "${LOCAL_DB_PATH}" "${SSH_TARGET}:${REMOTE_UPLOAD_PATH}"
+scp "${LOCAL_UPLOAD_SOURCE}" "${SSH_TARGET}:${REMOTE_UPLOAD_PATH}"
+if [[ "${LOCAL_UPLOAD_SOURCE}" != "${LOCAL_DB_PATH}" ]]; then
+  rm -f "${LOCAL_UPLOAD_SOURCE}"
+fi
 
 ssh "${SSH_TARGET}" "set -e
 if [ ! -f '${REMOTE_UPLOAD_PATH}' ]; then
@@ -145,6 +167,9 @@ fi
 
 mv '${REMOTE_UPLOAD_PATH}' '${REMOTE_DB_PATH}'
 rm -f '${REMOTE_DB_PATH}-wal' '${REMOTE_DB_PATH}-shm'
+find '${REMOTE_DB_DIR}' -maxdepth 1 -type f \
+  \( -name 'conversations*.json' -o -name 'characters*.json' -o -name 'profiles.json' \) \
+  -delete
 
 sudo systemctl start '${SERVICE_NAME}'
 systemctl is-active '${SERVICE_NAME}'
