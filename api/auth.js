@@ -24,7 +24,7 @@ export default {
     const authEnabled = (await getAccessUsers()).length > 0;
 
     if (!authEnabled) {
-      return json({ ok: true, authRequired: false, authenticated: true, accessId: 'public' });
+      return json({ ok: true, authRequired: false, authenticated: true, accountId: 'public' });
     }
 
     if (request.method === 'GET') {
@@ -34,7 +34,7 @@ export default {
         ok: true,
         authRequired: true,
         authenticated: Boolean(access),
-        accessId: access?.id || '',
+        accountId: access?.id || '',
       });
     }
 
@@ -63,7 +63,7 @@ export default {
     const token = await createAccessAuthToken(accessUser);
 
     return json(
-      { ok: true, authenticated: true, accessId: accessUser.id },
+      { ok: true, authenticated: true, accountId: accessUser.id },
       {
         headers: {
           'Set-Cookie': buildAuthCookie(token, request.url),

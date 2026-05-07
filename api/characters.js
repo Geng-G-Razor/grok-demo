@@ -26,10 +26,10 @@ export default {
         return json({ ok: false, error: '需要先输入访问密码' }, { status: 401 });
       }
 
-      const scope = access?.id || 'public';
+      const accountId = access?.id || 'public';
 
       if (request.method === 'GET') {
-        const result = await getStoredCharacters({ scope });
+        const result = await getStoredCharacters({ accountId });
 
         return json({ ok: true, ...result });
       }
@@ -39,7 +39,7 @@ export default {
       }
 
       const body = await readJson(request);
-      const result = await setStoredCharacters(normalizeCharacters(body.characters), { scope });
+      const result = await setStoredCharacters(normalizeCharacters(body.characters), { accountId });
 
       return json({ ok: true, ...result });
     } catch (error) {

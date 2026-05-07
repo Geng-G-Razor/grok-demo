@@ -103,7 +103,7 @@ pnpm access-user add admin 'your-password'
 pnpm access-user list
 ```
 
-`access_users.id` 会作为数据隔离 scope，例如 `admin` 账号会写入 SQLite 中的 `admin` scope。账号密码默认保存为 PBKDF2 哈希；如果确实要手动 SQL 插入，可以先生成哈希：
+`access_users.id` 会作为数据归属账号，对应 `conversations.account_id`、`characters.account_id` 和 `connection_profiles.account_id`。例如 `admin` 账号的数据会写入 `account_id = 'admin'`。账号密码默认保存为 PBKDF2 哈希；如果确实要手动 SQL 插入，可以先生成哈希：
 
 ```zsh
 pnpm access-user hash 'your-password'
@@ -143,7 +143,7 @@ vercel env add APP_PASSWORD production --sensitive
 .data/razor-chat.db
 ```
 
-多账号会按身份 ID 隔离，例如 `admin` 身份会写入 SQLite 中的 `admin` scope。
+多账号会按账号 ID 隔离，例如 `admin` 身份会写入 SQLite 中的 `account_id = 'admin'`。
 
 旧版 `.data/conversations*.json`、`.data/characters*.json`、`.data/profiles.json` 在首次访问时会自动迁移到 SQLite，迁移后本地存储统一走数据库。
 

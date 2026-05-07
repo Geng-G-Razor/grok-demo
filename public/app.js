@@ -212,7 +212,7 @@ createApp({
     return {
       availableModels,
       activePanel: '',
-      authContext: { authRequired: false, authenticated: true, accessId: 'public' },
+      authContext: { authRequired: false, authenticated: true, accountId: 'public' },
       status: { text: '未发送', type: 'idle' },
       userMessage: '',
       conversation: [],
@@ -335,23 +335,33 @@ createApp({
 
   methods: {
     conversationStorageKey() {
-      const accessId = String(this.authContext.accessId || 'public');
+      const accountId = String(this.authContext.accountId || 'public');
 
-      if (accessId === 'default' || accessId === 'public') {
+      if (accountId === 'default' || accountId === 'public') {
         return CONVERSATIONS_KEY;
       }
 
-      return `${CONVERSATIONS_KEY}:${accessId}`;
+      return `${CONVERSATIONS_KEY}:${accountId}`;
     },
 
     characterStorageKey() {
-      const accessId = String(this.authContext.accessId || 'public');
+      const accountId = String(this.authContext.accountId || 'public');
 
-      if (accessId === 'default' || accessId === 'public') {
+      if (accountId === 'default' || accountId === 'public') {
         return CHARACTERS_KEY;
       }
 
-      return `${CHARACTERS_KEY}:${accessId}`;
+      return `${CHARACTERS_KEY}:${accountId}`;
+    },
+
+    connectionProfileStorageKey() {
+      const accountId = String(this.authContext.accountId || 'public');
+
+      if (accountId === 'default' || accountId === 'public') {
+        return CONNECTION_PROFILES_KEY;
+      }
+
+      return `${CONNECTION_PROFILES_KEY}:${accountId}`;
     },
 
     async loadAuthContext() {
@@ -367,7 +377,7 @@ createApp({
         this.authContext = {
           authRequired: data.authRequired === true,
           authenticated: data.authenticated !== false,
-          accessId: String(data.accessId || (data.authRequired ? 'default' : 'public')),
+          accountId: String(data.accountId || (data.authRequired ? 'default' : 'public')),
         };
       } catch (error) {
         console.warn('Failed to load auth context:', error);
@@ -384,6 +394,7 @@ createApp({
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem(this.conversationStorageKey());
         localStorage.removeItem(this.characterStorageKey());
+        localStorage.removeItem(this.connectionProfileStorageKey());
         window.location.href = '/login.html';
       }
     },
@@ -563,7 +574,7 @@ createApp({
 
     async loadConnectionProfiles() {
       const defaultProfiles = await this.loadDefaultConnectionProfiles();
-      const stored = readJsonStorage(localStorage, CONNECTION_PROFILES_KEY, null);
+      const stored = readJsonStorage(localStorage, this.connectionProfileStorageKey(), null);
 
       if (Array.isArray(stored) && stored.length) {
         const normalizedStored = stored.map((profile) => createConnectionProfileRecord(profile));
@@ -588,7 +599,7 @@ createApp({
     },
 
     persistConnectionProfiles({ sync = true } = {}) {
-      localStorage.setItem(CONNECTION_PROFILES_KEY, JSON.stringify(this.connectionProfiles));
+      localStorage.setItem(this.connectionProfileStorageKey(), JSON.stringify(this.connectionProfiles));
 
       if (sync) {
         this.scheduleProfileSync();
