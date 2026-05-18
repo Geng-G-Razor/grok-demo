@@ -83,6 +83,7 @@ function createConversationRecord(seed = {}) {
     id: seed.id || createId('conversation'),
     title: seed.title || '新对话',
     messages: cloneMessages(seed.messages || []),
+    hidden: seed.hidden === true,
     createdAt: seed.createdAt || now,
     updatedAt: seed.updatedAt || now,
   };
@@ -133,9 +134,9 @@ function mergeConversationRecords(left = [], right = []) {
     }
   }
 
-  return [...recordsById.values()]
-    .filter((record) => hasMeaningfulConversationMessages(record.messages || []))
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  return [...recordsById.values()].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+  );
 }
 
 function escapeHtml(value) {
@@ -213,6 +214,7 @@ createApp({
     return {
       availableModels,
       activePanel: '',
+      historyView: 'active',
       authContext: { authRequired: false, authenticated: true, accountId: 'public' },
       status: { text: '未发送', type: 'idle' },
       userMessage: '',
@@ -283,11 +285,25 @@ createApp({
     },
 
     visibleConversations() {
-      return this.conversations.filter((record) => hasMeaningfulConversationMessages(record.messages || []));
+      return this.conversations.filter(
+        (record) => record.hidden !== true && hasMeaningfulConversationMessages(record.messages || []),
+      );
+    },
+
+    hiddenConversations() {
+      return this.conversations.filter(
+        (record) => record.hidden === true && hasMeaningfulConversationMessages(record.messages || []),
+      );
     },
 
     sortedConversations() {
       return [...this.visibleConversations].sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
+    },
+
+    sortedHiddenConversations() {
+      return [...this.hiddenConversations].sort(
         (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
       );
     },
@@ -1005,12 +1021,13 @@ createApp({
       }
 
       const existing = this.conversations.find((item) => item.id === this.currentConversationId);
+      const currentIsVisible = existing && existing.hidden !== true;
 
-      if (!existing) {
-        const sorted = [...this.conversations].sort(
+      if (!existing || !currentIsVisible) {
+        const sorted = [...this.visibleConversations].sort(
           (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
         );
-        this.currentConversationId = sorted[0]?.id || this.conversations[0].id;
+        this.currentConversationId = sorted[0]?.id || this.conversations[0]?.id || '';
       }
     },
 
@@ -1025,6 +1042,10 @@ createApp({
 
     pruneEmptyConversations({ keepCurrent = true } = {}) {
       this.conversations = this.conversations.filter((record) => {
+        if (record.hidden === true) {
+          return true;
+        }
+
         if (keepCurrent && record.id === this.currentConversationId) {
           return true;
         }
@@ -1063,6 +1084,10 @@ createApp({
       this.closeAllPanels();
     },
 
+    setHistoryView(view) {
+      this.historyView = view === 'hidden' ? 'hidden' : 'active';
+    },
+
     deleteConversation(record) {
       if (!record) {
         return;
@@ -1076,16 +1101,17 @@ createApp({
       }
 
       const isCurrentConversation = record.id === this.currentConversationId;
-      this.conversations = this.conversations.filter((item) => item.id !== record.id);
+      record.hidden = true;
+      record.updatedAt = new Date().toISOString();
 
       if (isCurrentConversation) {
-        let nextRecord = [...this.conversations].sort(
+        let nextRecord = this.visibleConversations.sort(
           (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
         )[0];
 
         if (!nextRecord) {
           nextRecord = createConversationRecord();
-          this.conversations = [nextRecord];
+          this.conversations = [...this.conversations, nextRecord];
         }
 
         this.currentConversationId = nextRecord.id;
@@ -1096,6 +1122,17 @@ createApp({
 
       this.persistConversations();
       this.saveSettings();
+    },
+
+    restoreConversation(record) {
+      if (!record) {
+        return;
+      }
+
+      record.hidden = false;
+      record.updatedAt = new Date().toISOString();
+      this.historyView = 'active';
+      this.persistConversations();
     },
 
     startNewConversation() {
@@ -1361,7 +1398,6 @@ createApp({
       this.setStatus('请求中', 'busy');
       this.clearDebug();
       this.saveCurrentConversationState();
-      this.scrollChatToBottom();
 
       const payload = {
         profileId: this.activeConnectionProfileId,
@@ -1372,6 +1408,63 @@ createApp({
       };
 
       try {
+        const streamDebugState = {
+          deltaCount: 0,
+          contentDeltaCount: 0,
+          reasoningDeltaCount: 0,
+          contentChars: 0,
+          reasoningChars: 0,
+          samples: [],
+        };
+
+        const updateStreamRawDebug = (event, data) => {
+          if (event === 'delta') {
+            const contentText = String(data?.content || '');
+            const reasoningText = String(data?.reasoning || '');
+
+            streamDebugState.deltaCount += 1;
+            streamDebugState.contentChars += contentText.length;
+            streamDebugState.reasoningChars += reasoningText.length;
+
+            if (contentText) {
+              streamDebugState.contentDeltaCount += 1;
+            }
+
+            if (reasoningText) {
+              streamDebugState.reasoningDeltaCount += 1;
+            }
+
+            if (streamDebugState.samples.length < 12) {
+              streamDebugState.samples.push({
+                index: streamDebugState.deltaCount,
+                contentLength: contentText.length,
+                reasoningLength: reasoningText.length,
+                contentPreview: contentText.slice(0, 80),
+                reasoningPreview: reasoningText.slice(0, 80),
+              });
+            }
+          }
+
+          this.debug.raw = JSON.stringify(
+            {
+              stream: {
+                deltaCount: streamDebugState.deltaCount,
+                contentDeltaCount: streamDebugState.contentDeltaCount,
+                reasoningDeltaCount: streamDebugState.reasoningDeltaCount,
+                contentChars: streamDebugState.contentChars,
+                reasoningChars: streamDebugState.reasoningChars,
+                samples: streamDebugState.samples,
+              },
+              latestEvent: {
+                event,
+                data,
+              },
+            },
+            null,
+            2,
+          );
+        };
+
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: {
@@ -1409,21 +1502,14 @@ createApp({
         let buffer = '';
         let finalData = null;
         let streamError = null;
-        const renderQueue = { content: '', reasoning: '' };
+        const renderQueue = { reasoning: '' };
         let renderTimer = 0;
 
         const flushQueuedText = () =>
           new Promise((resolve) => {
             const flush = () => {
               renderTimer = 0;
-
-              const contentStep = Math.min(renderQueue.content.length, renderQueue.content.length > 80 ? 8 : 4);
               const reasoningStep = Math.min(renderQueue.reasoning.length, renderQueue.reasoning.length > 80 ? 12 : 6);
-
-              if (contentStep > 0) {
-                assistantMessage.content += renderQueue.content.slice(0, contentStep);
-                renderQueue.content = renderQueue.content.slice(contentStep);
-              }
 
               if (reasoningStep > 0) {
                 assistantMessage.reasoning += renderQueue.reasoning.slice(0, reasoningStep);
@@ -1431,7 +1517,7 @@ createApp({
                 this.debug.reasoning = assistantMessage.reasoning;
               }
 
-              if (renderQueue.content || renderQueue.reasoning) {
+              if (renderQueue.reasoning) {
                 renderTimer = window.setTimeout(flush, 18);
                 return;
               }
@@ -1454,14 +1540,7 @@ createApp({
                 window.clearTimeout(renderTimer);
                 renderTimer = 0;
               }
-
-              const contentStep = Math.min(renderQueue.content.length, renderQueue.content.length > 80 ? 8 : 4);
               const reasoningStep = Math.min(renderQueue.reasoning.length, renderQueue.reasoning.length > 80 ? 12 : 6);
-
-              if (contentStep > 0) {
-                assistantMessage.content += renderQueue.content.slice(0, contentStep);
-                renderQueue.content = renderQueue.content.slice(contentStep);
-              }
 
               if (reasoningStep > 0) {
                 assistantMessage.reasoning += renderQueue.reasoning.slice(0, reasoningStep);
@@ -1469,7 +1548,7 @@ createApp({
                 this.debug.reasoning = assistantMessage.reasoning;
               }
 
-              if (renderQueue.content || renderQueue.reasoning) {
+              if (renderQueue.reasoning) {
                 window.setTimeout(drain, 18);
                 return;
               }
@@ -1481,7 +1560,10 @@ createApp({
           });
 
         const enqueueStreamText = (data) => {
-          renderQueue.content += data.content || '';
+          if (data.content) {
+            assistantMessage.content += data.content;
+          }
+
           renderQueue.reasoning += data.reasoning || '';
           flushQueuedText();
         };
@@ -1489,25 +1571,26 @@ createApp({
         const applyStreamEvent = ({ event, data }) => {
           if (event === 'meta') {
             this.updateStreamDebug(data, response);
-            this.debug.raw = JSON.stringify(data, null, 2);
+            updateStreamRawDebug(event, data);
             return;
           }
 
           if (event === 'delta') {
+            updateStreamRawDebug(event, data);
             enqueueStreamText(data);
             return;
           }
 
           if (event === 'error') {
             streamError = data;
-            this.debug.raw = JSON.stringify(data, null, 2);
+            updateStreamRawDebug(event, data);
             return;
           }
 
           if (event === 'done') {
             finalData = data;
             this.updateStreamDebug(data, response);
-            this.debug.raw = JSON.stringify(data, null, 2);
+            updateStreamRawDebug(event, data);
           }
         };
 

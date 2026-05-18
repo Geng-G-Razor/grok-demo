@@ -589,6 +589,37 @@ button {
   fill: currentColor;
 }
 
+.history-restore-button {
+  min-width: 58px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  color: #bbf7d0;
+}
+
+.history-restore-button:hover {
+  color: #dcfce7;
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.history-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.history-tab-button {
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.history-tab-button.active {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .history-title {
   font-size: 12px;
   font-weight: 700;
