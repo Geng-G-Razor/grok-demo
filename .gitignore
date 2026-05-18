@@ -1,5 +1,27 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editors
 .idea/
-.vercel
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment
+.env*
+
+# Dependencies
 node_modules/
+
+# Runtime
+*.log
+tmp/
 .data/
 .remote-db/
+
+# Vercel
+.vercel
